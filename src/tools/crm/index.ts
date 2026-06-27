@@ -32,7 +32,11 @@ import { z } from 'zod';
 import { type Tool } from '../../types/common.js';
 import { type HubSpotClient } from '../../hubspot-client.js';
 import { handleToolError } from '../../utils/error-handler.js';
-import { validateObjectType, CRM_OBJECT_TYPES } from '../../utils/object-types.js';
+import {
+  validateObjectType,
+  isAcceptedObjectType,
+  CRM_OBJECT_TYPES,
+} from '../../utils/object-types.js';
 import {
   SearchInputSchema,
   BatchCreateInputSchema,
@@ -55,11 +59,17 @@ import {
 
 /** Reusable Zod schema for the objectType parameter used in every CRM tool. */
 const ObjectTypeSchema = z
-  .enum(CRM_OBJECT_TYPES)
+  .string()
+  .refine(isAcceptedObjectType, {
+    message:
+      'Invalid CRM object type. Use a standard type ' +
+      `(${CRM_OBJECT_TYPES.join(', ')}) or a custom object type ID like "2-12345678".`,
+  })
   .describe(
     'CRM object type. ' +
-      'Sales objects: deals, line_items, products, quotes. ' +
-      'Engagement objects: calls, meetings, tasks, notes, emails.'
+      'Standard objects: contacts, companies, deals, line_items, products, quotes. ' +
+      'Engagement objects: calls, meetings, tasks, notes, emails. ' +
+      'Custom objects: pass the object type ID, e.g. "2-12345678".'
   );
 
 // ---------------------------------------------------------------------------
@@ -69,11 +79,11 @@ const ObjectTypeSchema = z
 /** JSON Schema descriptor reused across all CRM tools. */
 const OBJECT_TYPE_JSON = {
   type: 'string',
-  enum: [...CRM_OBJECT_TYPES],
+  examples: [...CRM_OBJECT_TYPES],
   description:
-    'CRM object type. ' +
-    'Sales objects: deals, line_items, products, quotes. ' +
-    'Engagement objects: calls, meetings, tasks, notes, emails.',
+    'CRM object type. Standard objects: contacts, companies, deals, line_items, products, quotes. ' +
+    'Engagement objects: calls, meetings, tasks, notes, emails. ' +
+    'Custom objects: pass the object type ID, e.g. "2-12345678".',
 };
 
 const PROPERTIES_QUERY_JSON = {
@@ -216,7 +226,7 @@ function buildListTool(client: HubSpotClient): Tool {
     handler: async (rawArgs: unknown) => {
       const args = schema.parse(rawArgs);
       const validType = validateObjectType(args.objectType);
-      const config = (await import('../../utils/object-types.js')).OBJECT_TYPE_CONFIG[validType];
+      const config = (await import('../../utils/object-types.js')).getObjectTypeConfig(validType);
 
       try {
         const result = await client.get<CollectionResponse<SimplePublicObject>>(
@@ -288,7 +298,7 @@ function buildGetTool(client: HubSpotClient): Tool {
     handler: async (rawArgs: unknown) => {
       const args = schema.parse(rawArgs);
       const validType = validateObjectType(args.objectType);
-      const config = (await import('../../utils/object-types.js')).OBJECT_TYPE_CONFIG[validType];
+      const config = (await import('../../utils/object-types.js')).getObjectTypeConfig(validType);
 
       try {
         const result = await client.get<SimplePublicObject>(
@@ -341,7 +351,7 @@ function buildCreateTool(client: HubSpotClient): Tool {
     handler: async (rawArgs: unknown) => {
       const args = schema.parse(rawArgs);
       const validType = validateObjectType(args.objectType);
-      const config = (await import('../../utils/object-types.js')).OBJECT_TYPE_CONFIG[validType];
+      const config = (await import('../../utils/object-types.js')).getObjectTypeConfig(validType);
 
       try {
         const body: Record<string, unknown> = { properties: args.properties };
@@ -392,7 +402,7 @@ function buildUpdateTool(client: HubSpotClient): Tool {
     handler: async (rawArgs: unknown) => {
       const args = schema.parse(rawArgs);
       const validType = validateObjectType(args.objectType);
-      const config = (await import('../../utils/object-types.js')).OBJECT_TYPE_CONFIG[validType];
+      const config = (await import('../../utils/object-types.js')).getObjectTypeConfig(validType);
 
       try {
         const result = await client.patch<SimplePublicObject>(
@@ -440,7 +450,7 @@ function buildArchiveTool(client: HubSpotClient): Tool {
     handler: async (rawArgs: unknown) => {
       const args = schema.parse(rawArgs);
       const validType = validateObjectType(args.objectType);
-      const config = (await import('../../utils/object-types.js')).OBJECT_TYPE_CONFIG[validType];
+      const config = (await import('../../utils/object-types.js')).getObjectTypeConfig(validType);
 
       try {
         await client.delete<unknown>(`/${config.basePath}/${encodeURIComponent(args.id)}`);
@@ -578,7 +588,7 @@ function buildSearchTool(client: HubSpotClient): Tool {
     handler: async (rawArgs: unknown) => {
       const args = schema.parse(rawArgs);
       const validType = validateObjectType(args.objectType);
-      const config = (await import('../../utils/object-types.js')).OBJECT_TYPE_CONFIG[validType];
+      const config = (await import('../../utils/object-types.js')).getObjectTypeConfig(validType);
 
       try {
         const searchBody: Record<string, unknown> = {
@@ -649,7 +659,7 @@ function buildBatchCreateTool(client: HubSpotClient): Tool {
     handler: async (rawArgs: unknown) => {
       const args = schema.parse(rawArgs);
       const validType = validateObjectType(args.objectType);
-      const config = (await import('../../utils/object-types.js')).OBJECT_TYPE_CONFIG[validType];
+      const config = (await import('../../utils/object-types.js')).getObjectTypeConfig(validType);
 
       try {
         const result = await client.post<BatchResponse<SimplePublicObject>>(
@@ -744,7 +754,7 @@ function buildBatchReadTool(client: HubSpotClient): Tool {
     handler: async (rawArgs: unknown) => {
       const args = schema.parse(rawArgs);
       const validType = validateObjectType(args.objectType);
-      const config = (await import('../../utils/object-types.js')).OBJECT_TYPE_CONFIG[validType];
+      const config = (await import('../../utils/object-types.js')).getObjectTypeConfig(validType);
 
       try {
         const body: Record<string, unknown> = { inputs: args.inputs };
@@ -811,7 +821,7 @@ function buildBatchUpdateTool(client: HubSpotClient): Tool {
     handler: async (rawArgs: unknown) => {
       const args = schema.parse(rawArgs);
       const validType = validateObjectType(args.objectType);
-      const config = (await import('../../utils/object-types.js')).OBJECT_TYPE_CONFIG[validType];
+      const config = (await import('../../utils/object-types.js')).getObjectTypeConfig(validType);
 
       try {
         const result = await client.post<BatchResponse<SimplePublicObject>>(
@@ -867,7 +877,7 @@ function buildBatchArchiveTool(client: HubSpotClient): Tool {
     handler: async (rawArgs: unknown) => {
       const args = schema.parse(rawArgs);
       const validType = validateObjectType(args.objectType);
-      const config = (await import('../../utils/object-types.js')).OBJECT_TYPE_CONFIG[validType];
+      const config = (await import('../../utils/object-types.js')).getObjectTypeConfig(validType);
 
       try {
         await client.post<unknown>(`/${config.basePath}/batch/archive`, { inputs: args.inputs });
@@ -938,7 +948,7 @@ function buildBatchUpsertTool(client: HubSpotClient): Tool {
     handler: async (rawArgs: unknown) => {
       const args = schema.parse(rawArgs);
       const validType = validateObjectType(args.objectType);
-      const config = (await import('../../utils/object-types.js')).OBJECT_TYPE_CONFIG[validType];
+      const config = (await import('../../utils/object-types.js')).getObjectTypeConfig(validType);
 
       try {
         const result = await client.post<BatchResponse<SimplePublicObject>>(

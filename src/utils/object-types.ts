@@ -18,7 +18,10 @@
  * standard contact/company tools with their own dedicated endpoints.
  */
 export const CRM_OBJECT_TYPES = [
+  'contacts',
+  'companies',
   'deals',
+  'tickets',
   'line_items',
   'products',
   'quotes',
@@ -29,8 +32,15 @@ export const CRM_OBJECT_TYPES = [
   'emails',
 ] as const;
 
-/** Union type of all valid CRM object type strings. */
+/** Union type of all standard CRM object type strings. */
 export type CrmObjectType = (typeof CRM_OBJECT_TYPES)[number];
+
+/**
+ * Matches HubSpot custom object type IDs (and standard fully-qualified IDs),
+ * e.g. `2-12345678` for a custom object or `0-3` for deals. The generic CRM
+ * tools accept these directly so any portal's custom objects are reachable.
+ */
+export const CUSTOM_OBJECT_TYPE_RE = /^\d+-\d+$/;
 
 /**
  * Per-object-type configuration metadata used to build API paths and
@@ -44,7 +54,7 @@ export interface ObjectTypeConfig {
   /** OAuth scope required to create/update/delete objects of this type. */
   scopeWrite: string;
   /** The HubSpot MCP toolset domain that owns this object type. */
-  toolset: 'sales' | 'engagements';
+  toolset: 'sales' | 'engagements' | 'crm';
 }
 
 /**
@@ -58,11 +68,29 @@ export interface ObjectTypeConfig {
  * // { basePath: 'crm/v3/objects/deals', scopeRead: 'crm.objects.deals.read', ... }
  */
 export const OBJECT_TYPE_CONFIG: Record<CrmObjectType, ObjectTypeConfig> = {
+  contacts: {
+    basePath: 'crm/v3/objects/contacts',
+    scopeRead: 'crm.objects.contacts.read',
+    scopeWrite: 'crm.objects.contacts.write',
+    toolset: 'crm',
+  },
+  companies: {
+    basePath: 'crm/v3/objects/companies',
+    scopeRead: 'crm.objects.companies.read',
+    scopeWrite: 'crm.objects.companies.write',
+    toolset: 'crm',
+  },
   deals: {
     basePath: 'crm/v3/objects/deals',
     scopeRead: 'crm.objects.deals.read',
     scopeWrite: 'crm.objects.deals.write',
     toolset: 'sales',
+  },
+  tickets: {
+    basePath: 'crm/v3/objects/tickets',
+    scopeRead: 'crm.objects.tickets.read',
+    scopeWrite: 'crm.objects.tickets.write',
+    toolset: 'crm',
   },
   line_items: {
     basePath: 'crm/v3/objects/line_items',
@@ -126,13 +154,49 @@ export const OBJECT_TYPE_CONFIG: Record<CrmObjectType, ObjectTypeConfig> = {
  * const t = validateObjectType('deals'); // → 'deals' (typed as CrmObjectType)
  * validateObjectType('contacts');        // throws Error
  */
-export function validateObjectType(type: string): CrmObjectType {
-  if (!isValidObjectType(type)) {
+export function validateObjectType(type: string): string {
+  if (!isAcceptedObjectType(type)) {
     throw new Error(
-      `Invalid CRM object type: "${type}". ` + `Valid types are: ${CRM_OBJECT_TYPES.join(', ')}.`
+      `Invalid CRM object type: "${type}". ` +
+        `Valid types are: ${CRM_OBJECT_TYPES.join(', ')}, ` +
+        `or a custom object type ID like "2-12345678".`
     );
   }
   return type;
+}
+
+/** Returns `true` for a HubSpot custom/fully-qualified object type ID (e.g. `2-12345678`). */
+export function isCustomObjectType(type: string): boolean {
+  return CUSTOM_OBJECT_TYPE_RE.test(type);
+}
+
+/** Returns `true` if `type` is a known standard type or a custom object type ID. */
+export function isAcceptedObjectType(type: string): boolean {
+  return isValidObjectType(type) || isCustomObjectType(type);
+}
+
+/**
+ * Resolves the API path/scope config for any accepted object type.
+ *
+ * Standard types come from {@link OBJECT_TYPE_CONFIG}; custom object type IDs
+ * (e.g. `2-12345678`) get a synthesized config pointing at
+ * `crm/v3/objects/<id>` with the generic custom-object scopes.
+ *
+ * @throws {Error} If `type` is neither a known type nor a custom object ID.
+ */
+export function getObjectTypeConfig(type: string): ObjectTypeConfig {
+  if (isValidObjectType(type)) {
+    return OBJECT_TYPE_CONFIG[type];
+  }
+  if (isCustomObjectType(type)) {
+    return {
+      basePath: `crm/v3/objects/${type}`,
+      scopeRead: 'crm.objects.custom.read',
+      scopeWrite: 'crm.objects.custom.write',
+      toolset: 'crm',
+    };
+  }
+  throw new Error(`Invalid CRM object type: "${type}".`);
 }
 
 /**

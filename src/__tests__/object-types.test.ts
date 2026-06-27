@@ -4,6 +4,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   isValidObjectType,
+  isCustomObjectType,
+  isAcceptedObjectType,
+  getObjectTypeConfig,
   validateObjectType,
   OBJECT_TYPE_CONFIG,
   CRM_OBJECT_TYPES,
@@ -20,16 +23,32 @@ describe('isValidObjectType', () => {
     expect(isValidObjectType('deals')).toBe(true);
   });
 
-  it('returns false for contacts (not in the supported list)', () => {
-    expect(isValidObjectType('contacts')).toBe(false);
+  it('returns true for contacts (now a supported standard object)', () => {
+    expect(isValidObjectType('contacts')).toBe(true);
   });
 
-  it('returns false for companies (not in the supported list)', () => {
-    expect(isValidObjectType('companies')).toBe(false);
+  it('returns true for companies (now a supported standard object)', () => {
+    expect(isValidObjectType('companies')).toBe(true);
   });
 
   it('returns false for empty string', () => {
     expect(isValidObjectType('')).toBe(false);
+  });
+
+  it('treats custom object type IDs as custom (not standard) but accepted', () => {
+    expect(isValidObjectType('2-193735088')).toBe(false);
+    expect(isCustomObjectType('2-193735088')).toBe(true);
+    expect(isAcceptedObjectType('2-193735088')).toBe(true);
+    expect(isAcceptedObjectType('contacts')).toBe(true);
+    expect(isCustomObjectType('deals')).toBe(false);
+  });
+
+  it('synthesizes a config for custom object type IDs', () => {
+    const cfg = getObjectTypeConfig('2-193735088');
+    expect(cfg.basePath).toBe('crm/v3/objects/2-193735088');
+    expect(cfg.scopeRead).toContain('crm.objects');
+    expect(getObjectTypeConfig('contacts').basePath).toBe('crm/v3/objects/contacts');
+    expect(validateObjectType('2-193735088')).toBe('2-193735088');
   });
 
   it('returns false for arbitrary invalid strings', () => {
@@ -47,8 +66,8 @@ describe('validateObjectType', () => {
   });
 
   it('throws an error with a descriptive message for invalid types', () => {
-    expect(() => validateObjectType('contacts')).toThrow('Invalid CRM object type');
-    expect(() => validateObjectType('contacts')).toThrow('contacts');
+    expect(() => validateObjectType('widgets')).toThrow('Invalid CRM object type');
+    expect(() => validateObjectType('widgets')).toThrow('widgets');
   });
 
   it('throws for an empty string', () => {

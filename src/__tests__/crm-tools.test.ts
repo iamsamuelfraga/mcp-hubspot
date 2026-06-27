@@ -164,7 +164,7 @@ describe('hubspot_crm_list', () => {
     const { tools } = makeTools();
     const tool = getTool(tools, 'hubspot_crm_list');
 
-    await expect(tool.handler({ objectType: 'contacts' })).rejects.toThrow();
+    await expect(tool.handler({ objectType: 'not_a_real_type' })).rejects.toThrow();
   });
 
   it('returns isError on HubSpot API error', async () => {
