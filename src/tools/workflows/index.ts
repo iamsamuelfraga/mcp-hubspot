@@ -117,8 +117,9 @@ function buildListWorkflowsTool(client: HubSpotClient): Tool {
     name: 'hubspot_workflows_list',
     description:
       '[BETA] List automation workflows (flows) from HubSpot Automation v4 API. ' +
-      'Returns a paginated list of all flows in the portal. ' +
-      'Use the returned paging.next.after cursor in the "after" parameter to fetch subsequent pages. ' +
+      'Returns a paginated list of all flows in the portal with shape ' +
+      '{ results, total, pagination: { nextCursor } | null }. ' +
+      'Use `pagination.nextCursor` from the response as the "after" parameter to fetch subsequent pages. ' +
       'Requires the "automation" OAuth scope.',
     inputSchema: {
       type: 'object' as const,
@@ -201,7 +202,9 @@ function buildGetWorkflowTool(client: HubSpotClient): Tool {
       const args = GetWorkflowInputSchema.parse(rawArgs);
 
       try {
-        const flow = await client.get<unknown>(`/automation/v4/flows/${args.flowId}`);
+        const flow = await client.get<unknown>(
+          `/automation/v4/flows/${encodeURIComponent(args.flowId)}`
+        );
         return flow;
       } catch (error) {
         return handleToolError(error);
@@ -363,7 +366,10 @@ function buildUpdateWorkflowTool(client: HubSpotClient): Tool {
       const { flowId, ...updateBody } = UpdateWorkflowInputSchema.parse(rawArgs);
 
       try {
-        const flow = await client.put<unknown>(`/automation/v4/flows/${flowId}`, updateBody);
+        const flow = await client.put<unknown>(
+          `/automation/v4/flows/${encodeURIComponent(flowId)}`,
+          updateBody
+        );
         return flow;
       } catch (error) {
         return handleToolError(error);
@@ -409,7 +415,7 @@ function buildDeleteWorkflowTool(client: HubSpotClient): Tool {
       const args = DeleteWorkflowInputSchema.parse(rawArgs);
 
       try {
-        await client.delete<unknown>(`/automation/v4/flows/${args.flowId}`);
+        await client.delete<unknown>(`/automation/v4/flows/${encodeURIComponent(args.flowId)}`);
         return {
           success: true,
           deleted: true,
@@ -564,7 +570,7 @@ function buildWorkflowPerformanceTool(client: HubSpotClient): Tool {
 
       try {
         const response = await client.get<unknown>(
-          `/automation/v4/flows/performance/${args.flowId}`
+          `/automation/v4/flows/performance/${encodeURIComponent(args.flowId)}`
         );
         return response;
       } catch (error) {

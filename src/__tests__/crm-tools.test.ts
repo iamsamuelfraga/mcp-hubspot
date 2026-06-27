@@ -136,14 +136,17 @@ describe('hubspot_crm_list', () => {
     });
   });
 
-  it('returns paginated deal results', async () => {
+  it('returns paginated deal results with normalized pagination shape', async () => {
     const { tools } = makeTools();
     const tool = getTool(tools, 'hubspot_crm_list');
 
     const result = await tool.handler({ objectType: 'deals' });
+    // The handler now returns the canonical { results, total, pagination } shape
+    // rather than the raw HubSpot CollectionResponse.
     expect(result).toMatchObject({
       results: [expect.objectContaining({ id: '111' })],
-      paging: { next: { after: '10' } },
+      total: 1,
+      pagination: { nextCursor: '10' },
     });
   });
 

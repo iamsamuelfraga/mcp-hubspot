@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/draft/server.schema.json",
+  "name": "io.github.iamsamuelfraga/mcp-hubspot",
+  "description": "Enterprise-grade HubSpot CRM integration with 37 MCP tools for sales, workflows, and automation",
+  "version": "0.1.0",
+  "homepage": "https://github.com/iamsamuelfraga/mcp-hubspot",
+  "license": "MIT",
+  "author": {
+    "name": "Samuel Fraga",
+    "url": "https://github.com/iamsamuelfraga"
+  },
+  "sourceCode": "https://github.com/iamsamuelfraga/mcp-hubspot",
+  "package": {
+    "registryType": "npm",
+    "identifier": "@iamsamuelfraga/mcp-hubspot",
+    "version": "0.1.0"
+  },
+  "environmentVariables": {
+    "HUBSPOT_ACCESS_TOKEN": {
+      "description": "HubSpot Private App access token (pat-na1-...)",
+      "required": true
+    },
+    "HUBSPOT_TOOLSETS": {
+      "description": "Comma-separated toolsets to enable (e.g., 'sales,workflows'). Defaults to all toolsets."
+    },
+    "LOG_LEVEL": {
+      "description": "Logging verbosity: debug, info, warn, error. Defaults to info."
+    }
+  }
+}

@@ -34,14 +34,16 @@ export type CallbackCompleteInput = z.infer<typeof CallbackCompleteSchema>;
  * Maps to POST /automation/v4/actions/callbacks/complete.
  */
 export const CallbackCompleteBatchSchema = z.object({
-  callbackInputs: z.array(
-    z.object({
-      callbackId: z.string().min(1),
-      outputFields: z.object({
-        hs_execution_state: z.enum(['SUCCESS', 'FAIL_CONTINUE', 'BLOCK']),
-      }),
-    })
-  ),
+  callbackInputs: z
+    .array(
+      z.object({
+        callbackId: z.string().min(1),
+        outputFields: z.object({
+          hs_execution_state: z.enum(['SUCCESS', 'FAIL_CONTINUE', 'BLOCK']),
+        }),
+      })
+    )
+    .min(1, 'At least one callbackInput is required'),
 });
 
 /** TypeScript type inferred from CallbackCompleteBatchSchema. */
@@ -80,7 +82,8 @@ export type UnenrollContactInput = z.infer<typeof UnenrollContactSchema>;
  * Maps to GET /automation/v2/enrollments/contacts/{vid}.
  */
 export const GetEnrollmentsSchema = z.object({
-  vid: z.string().min(1),
+  /** HubSpot contact VID — must be a string of digits only. */
+  vid: z.string().regex(/^\d+$/, 'VID must be a numeric string'),
 });
 
 /** TypeScript type inferred from GetEnrollmentsSchema. */
@@ -96,7 +99,7 @@ export type GetEnrollmentsInput = z.infer<typeof GetEnrollmentsSchema>;
  */
 export const WorkflowsV3ListSchema = z.object({
   offset: z.number().int().optional(),
-  limit: z.number().int().min(1).max(100).default(25).optional(),
+  limit: z.number().int().min(1).max(100).default(25),
 });
 
 /** TypeScript type inferred from WorkflowsV3ListSchema. */

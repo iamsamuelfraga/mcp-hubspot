@@ -31,6 +31,16 @@ export interface RateLimiterConfig {
 }
 
 /**
+ * Maximum number of times Bottleneck's `failed` event handler will re-schedule
+ * a job that received a 429. Once this limit is reached, Bottleneck returns
+ * `undefined` from the handler so the error propagates to the outer `withRetry`
+ * wrapper which applies exponential back-off with a finite retry cap.
+ *
+ * Value of 1 means: one Bottleneck-level 429 retry, then propagate.
+ */
+const MAX_BOTTLENECK_RETRIES = 1;
+
+/**
  * Thin wrapper around a Bottleneck instance that provides typed scheduling
  * and wires up operational event logging.
  *
@@ -58,9 +68,14 @@ export class RateLimiter {
 
     // Retry 429s automatically at the Bottleneck level; actual retry with
     // backoff is handled by `withRetry` in `retry.ts`.
+    // Cap at MAX_BOTTLENECK_RETRIES so that after one Bottleneck-level retry
+    // the error propagates out of limiter.schedule() to withRetry. Without
+    // this cap the failed handler would return 5000 indefinitely, preventing
+    // limiter.schedule() from ever rejecting and hanging the call under
+    // sustained rate-limiting.
     this.limiter.on('failed', async (error, jobInfo) => {
       const statusCode = (error as { statusCode?: number }).statusCode;
-      if (statusCode === 429) {
+      if (statusCode === 429 && jobInfo.retryCount < MAX_BOTTLENECK_RETRIES) {
         logger.warn('Rate limit hit in queue, will retry job', {
           jobId: jobInfo.options.id,
           retryCount: jobInfo.retryCount,

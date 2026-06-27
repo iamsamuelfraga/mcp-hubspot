@@ -100,7 +100,7 @@ const ARCHIVED_JSON = {
 
 const AFTER_CURSOR_JSON = {
   type: 'string',
-  description: 'Pagination cursor from `paging.next.after` in the previous response.',
+  description: 'Pagination cursor from `pagination.nextCursor` in the previous response.',
 };
 
 const LIST_LIMIT_JSON = {
@@ -195,10 +195,11 @@ function buildListTool(client: HubSpotClient): Tool {
     name: 'hubspot_crm_list',
     description:
       'List HubSpot CRM records of any object type (deals, line_items, products, quotes, calls, ' +
-      'meetings, tasks, notes, emails). Returns a paginated collection. ' +
+      'meetings, tasks, notes, emails). Returns a paginated collection with shape ' +
+      '{ results, total, pagination: { nextCursor } | null }. ' +
       'IMPORTANT: HubSpot returns only default properties unless you specify them explicitly ' +
       'via the `properties` parameter (e.g., "dealname,amount,closedate"). ' +
-      'Use the `after` cursor from `paging.next.after` to page through large result sets.',
+      'Use `pagination.nextCursor` from the response as the `after` parameter to page through large result sets.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -228,7 +229,13 @@ function buildListTool(client: HubSpotClient): Tool {
             archived: args.archived,
           }
         );
-        return result;
+        // Normalize to canonical pagination shape used by all list tools:
+        // { results, total, pagination: { nextCursor } | null }
+        return {
+          results: result.results,
+          total: result.results.length,
+          pagination: result.paging?.next ? { nextCursor: result.paging.next.after } : null,
+        };
       } catch (error) {
         return handleToolError(error);
       }
@@ -284,11 +291,14 @@ function buildGetTool(client: HubSpotClient): Tool {
       const config = (await import('../../utils/object-types.js')).OBJECT_TYPE_CONFIG[validType];
 
       try {
-        const result = await client.get<SimplePublicObject>(`/${config.basePath}/${args.id}`, {
-          properties: args.properties,
-          associations: args.associations,
-          archived: args.archived,
-        });
+        const result = await client.get<SimplePublicObject>(
+          `/${config.basePath}/${encodeURIComponent(args.id)}`,
+          {
+            properties: args.properties,
+            associations: args.associations,
+            archived: args.archived,
+          }
+        );
         return result;
       } catch (error) {
         return handleToolError(error);
@@ -385,9 +395,10 @@ function buildUpdateTool(client: HubSpotClient): Tool {
       const config = (await import('../../utils/object-types.js')).OBJECT_TYPE_CONFIG[validType];
 
       try {
-        const result = await client.patch<SimplePublicObject>(`/${config.basePath}/${args.id}`, {
-          properties: args.properties,
-        });
+        const result = await client.patch<SimplePublicObject>(
+          `/${config.basePath}/${encodeURIComponent(args.id)}`,
+          { properties: args.properties }
+        );
         return result;
       } catch (error) {
         return handleToolError(error);
@@ -432,7 +443,7 @@ function buildArchiveTool(client: HubSpotClient): Tool {
       const config = (await import('../../utils/object-types.js')).OBJECT_TYPE_CONFIG[validType];
 
       try {
-        await client.delete<unknown>(`/${config.basePath}/${args.id}`);
+        await client.delete<unknown>(`/${config.basePath}/${encodeURIComponent(args.id)}`);
         return { success: true, id: args.id, objectType: validType, archived: true };
       } catch (error) {
         return handleToolError(error);

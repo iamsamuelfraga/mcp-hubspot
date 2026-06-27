@@ -116,7 +116,7 @@ function buildCreateAssociationTool(client: HubSpotClient): Tool {
       const args = CreateAssociationSchema.parse(rawArgs);
 
       try {
-        const path = `/crm/v4/objects/${args.fromType}/${args.fromId}/associations/${args.toType}/${args.toId}`;
+        const path = `/crm/v4/objects/${encodeURIComponent(args.fromType)}/${encodeURIComponent(args.fromId)}/associations/${encodeURIComponent(args.toType)}/${encodeURIComponent(args.toId)}`;
         const result = await client.put<unknown>(path, args.associationTypes);
 
         return {
@@ -182,7 +182,7 @@ function buildArchiveAssociationTool(client: HubSpotClient): Tool {
       const args = ArchiveAssociationSchema.parse(rawArgs);
 
       try {
-        const path = `/crm/v4/objects/${args.fromType}/${args.fromId}/associations/${args.toType}/${args.toId}`;
+        const path = `/crm/v4/objects/${encodeURIComponent(args.fromType)}/${encodeURIComponent(args.fromId)}/associations/${encodeURIComponent(args.toType)}/${encodeURIComponent(args.toId)}`;
         await client.delete<unknown>(path);
 
         return {
@@ -214,7 +214,8 @@ function buildListAssociationsTool(client: HubSpotClient): Tool {
     description:
       'List all associated records of a given type for a specific HubSpot object (v4 API). ' +
       'For example, retrieve all contacts associated with a deal, or all deals linked to a call. ' +
-      'Results are paginated — use the returned cursor in the "after" parameter for subsequent pages.',
+      'Returns { results, total, pagination: { nextCursor } | null }. ' +
+      'Use `pagination.nextCursor` as the "after" parameter to fetch subsequent pages.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -253,7 +254,7 @@ function buildListAssociationsTool(client: HubSpotClient): Tool {
       const args = ListAssociationsSchema.parse(rawArgs);
 
       try {
-        const path = `/crm/v4/objects/${args.fromType}/${args.fromId}/associations/${args.toType}`;
+        const path = `/crm/v4/objects/${encodeURIComponent(args.fromType)}/${encodeURIComponent(args.fromId)}/associations/${encodeURIComponent(args.toType)}`;
         const response = await client.get<{
           results: {
             toObjectId: string;
@@ -372,7 +373,7 @@ function buildBatchCreateAssociationsTool(client: HubSpotClient): Tool {
       const args = BatchCreateAssociationsSchema.parse(rawArgs);
 
       try {
-        const path = `/crm/v4/associations/${args.fromType}/${args.toType}/batch/create`;
+        const path = `/crm/v4/associations/${encodeURIComponent(args.fromType)}/${encodeURIComponent(args.toType)}/batch/create`;
         const response = await client.post<{
           status: string;
           results: {
@@ -443,7 +444,7 @@ function buildListAssociationLabelsTool(client: HubSpotClient): Tool {
       const args = ListAssociationLabelsSchema.parse(rawArgs);
 
       try {
-        const path = `/crm/v4/associations/${args.fromType}/${args.toType}/labels`;
+        const path = `/crm/v4/associations/${encodeURIComponent(args.fromType)}/${encodeURIComponent(args.toType)}/labels`;
         const response = await client.get<{
           results: {
             category: string;

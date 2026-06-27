@@ -100,10 +100,13 @@ export async function withRetry<T>(fn: () => Promise<T>, options: RetryOptions =
           ? (error as { retryAfter?: number }).retryAfter
           : undefined;
 
+      // Apply jitter BEFORE the cap so the result never exceeds maxDelay.
+      // Without Math.min the jittered value can reach maxDelay * 1.3 when
+      // `delay` has already saturated at maxDelay.
       const actualDelay = retryAfterSeconds
         ? retryAfterSeconds * 1000
         : jitter
-          ? delay * (1 + Math.random() * 0.3)
+          ? Math.min(delay * (1 + Math.random() * 0.3), maxDelay)
           : delay;
 
       logger.warn('Request failed, retrying', {

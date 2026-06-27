@@ -131,8 +131,8 @@ function buildGetEnrollmentsTool(client: HubSpotClient): Tool {
       properties: {
         vid: {
           type: 'string',
-          minLength: 1,
-          description: 'HubSpot contact VID (record ID).',
+          pattern: '^\\d+$',
+          description: 'HubSpot contact VID (record ID). Must be a numeric string, e.g. "123456".',
         },
       },
       required: ['vid'],
@@ -142,7 +142,9 @@ function buildGetEnrollmentsTool(client: HubSpotClient): Tool {
       const args = GetEnrollmentsSchema.parse(rawArgs);
 
       try {
-        return await client.get<unknown>(`/automation/v2/enrollments/contacts/${args.vid}`);
+        return await client.get<unknown>(
+          `/automation/v2/enrollments/contacts/${encodeURIComponent(args.vid)}`
+        );
       } catch (error) {
         return handleToolError(error);
       }
