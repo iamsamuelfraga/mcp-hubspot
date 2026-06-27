@@ -24,7 +24,14 @@ import { type Tool } from './types/common.js';
 import { logger } from './utils/logger.js';
 import { handleToolError } from './utils/error-handler.js';
 import { metricsCollector } from './utils/metrics.js';
-import { getEnabledToolsets, findToolset } from './utils/toolset-filter.js';
+import { getEnabledToolsets, type HubSpotToolset } from './utils/toolset-filter.js';
+import { getCrmTools } from './tools/crm/index.js';
+import { getSalesTools } from './tools/sales/index.js';
+import { getAssociationsTools } from './tools/associations/index.js';
+import { getPropertiesTools } from './tools/properties/index.js';
+import { getWorkflowsTools } from './tools/workflows/index.js';
+import { getAutomationTools } from './tools/automation/index.js';
+import { getEnrollmentTools } from './tools/enrollment/index.js';
 import { setupResources } from './resources/index.js';
 import { setupPrompts } from './prompts/index.js';
 
@@ -63,45 +70,54 @@ const client = new HubSpotClient({ accessToken: ACCESS_TOKEN });
 // ─── Tool registration ───────────────────────────────────────────────────────
 
 /**
- * Registers all domain tool modules and returns the combined tool array.
+ * A group of tools tagged with the toolset(s) it belongs to.
  *
- * Each domain is added here as its implementation phase completes.
- * Currently returns an empty array (Phase 0 – foundations only).
- *
- * @param _client - The HubSpotClient instance passed to each domain's factory.
- * @returns Array of all registered Tool objects.
+ * The hybrid tool design means a single factory can serve more than one
+ * toolset: the generic CRM tools cover both `sales` and `engagements`
+ * object types, so they are enabled when either toolset is active.
  */
-function registerTools(_client: HubSpotClient): Tool[] {
-  const tools: Tool[] = [
-    // Phase 1: Sales tools (deals, line_items, products, quotes)
-    // ...getSalesTools(client),
-    // Phase 2: Engagement tools (calls, meetings, tasks, notes, emails)
-    // ...getEngagementTools(client),
-    // Phase 3: Association tools
-    // ...getAssociationTools(client),
-    // Phase 4: Properties tools
-    // ...getPropertyTools(client),
-    // Phase 5: Workflows tools
-    // ...getWorkflowTools(client),
-    // Phase 6: Automation tools
-    // ...getAutomationTools(client),
-  ];
-
-  return tools;
+interface ToolGroup {
+  toolsets: HubSpotToolset[];
+  tools: Tool[];
 }
 
-// Build the tool registry
-const enabledToolsets = getEnabledToolsets();
-const allTools = registerTools(client);
+/**
+ * Builds every domain's tools, each tagged with its owning toolset(s).
+ *
+ * Tool names follow `hubspot_<area>_<action>` and do not always match a
+ * toolset name (e.g. `hubspot_crm_*`, `hubspot_enrollment_*`), so toolset
+ * membership is declared explicitly here rather than inferred from the name.
+ *
+ * @param client - The HubSpotClient instance passed to each domain's factory.
+ * @returns Array of tool groups with explicit toolset membership.
+ */
+function registerToolGroups(client: HubSpotClient): ToolGroup[] {
+  return [
+    // Generic CRM CRUD/search/batch — shared backbone for sales + engagements objects.
+    { toolsets: ['sales', 'engagements'], tools: getCrmTools(client) },
+    // Sales-specific helpers (deals merge, quotes assemble).
+    { toolsets: ['sales'], tools: getSalesTools(client) },
+    { toolsets: ['associations'], tools: getAssociationsTools(client) },
+    { toolsets: ['properties'], tools: getPropertiesTools(client) },
+    { toolsets: ['workflows'], tools: getWorkflowsTools(client) },
+    // Automation runtime (callbacks) + workflow enrollment + legacy v3 reads.
+    {
+      toolsets: ['automation'],
+      tools: [...getAutomationTools(client), ...getEnrollmentTools(client)],
+    },
+  ];
+}
 
-// Filter by enabled toolset (tools with no toolset prefix are always included)
+// Build the tool registry, filtering by enabled toolsets.
+const enabledToolsets = getEnabledToolsets();
 const tools: Record<string, Tool> = {};
-for (const tool of allTools) {
-  const toolset = findToolset(tool.name, enabledToolsets);
-  if (toolset !== undefined) {
+for (const group of registerToolGroups(client)) {
+  if (!group.toolsets.some((t) => enabledToolsets.includes(t))) {
+    logger.debug('Toolset disabled, skipping group', { toolsets: group.toolsets.join(',') });
+    continue;
+  }
+  for (const tool of group.tools) {
     tools[tool.name] = tool;
-  } else {
-    logger.debug('Toolset disabled, skipping tool', { tool: tool.name });
   }
 }
 
@@ -194,17 +210,7 @@ async function main(): Promise<void> {
     enabledToolsets,
   });
 
-  logger.debug(
-    'Tools by toolset',
-    (() => {
-      const byToolset: Record<string, number> = {};
-      for (const name of Object.keys(tools)) {
-        const ts = findToolset(name, enabledToolsets) ?? 'unassigned';
-        byToolset[ts] = (byToolset[ts] ?? 0) + 1;
-      }
-      return byToolset;
-    })()
-  );
+  logger.debug('Registered tools', { tools: Object.keys(tools) });
 }
 
 // ─── Graceful shutdown ───────────────────────────────────────────────────────
