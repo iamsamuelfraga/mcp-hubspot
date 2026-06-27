@@ -112,6 +112,28 @@ if (firstIds.deals) {
   });
 }
 
+console.log('\n── Engagements get / search / associations→deals ──');
+for (const ot of ENGAGEMENTS) {
+  if (firstIds[ot]) {
+    await run(`crm_get ${ot}[0]`, 'hubspot_crm_get', { objectType: ot, id: firstIds[ot] });
+    await run(`assoc_list ${ot}→deals`, 'hubspot_associations_list', {
+      fromType: ot,
+      fromId: firstIds[ot],
+      toType: 'deals',
+    });
+  }
+}
+await run('crm_search calls (recent)', 'hubspot_crm_search', {
+  objectType: 'calls',
+  limit: 3,
+  sorts: [{ propertyName: 'hs_createdate', direction: 'DESCENDING' }],
+});
+await run('crm_search tasks (recent)', 'hubspot_crm_search', {
+  objectType: 'tasks',
+  limit: 3,
+  sorts: [{ propertyName: 'hs_createdate', direction: 'DESCENDING' }],
+});
+
 console.log('\n── Workflows / Automation (read) ──');
 const wf = await run('workflows_list (v4 flows)', 'hubspot_workflows_list', { limit: 5 });
 if (!isErr(wf) && wf?.results?.[0]?.id) {
