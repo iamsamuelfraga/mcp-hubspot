@@ -251,5 +251,84 @@ describe('setupPrompts', () => {
         })
       ).rejects.toThrow('Prompt not found: nonexistent-prompt');
     });
+
+    it('create-deal-with-line-items includes pipelineId and contactId when provided', async () => {
+      // Covers the TRUE branches of pipelineLine and contactNote ternaries (lines 73-76)
+      const { mockServer, handlers } = buildMockServer();
+      setupPrompts(mockServer);
+
+      const result = (await handlers.get('prompts/get')?.({
+        method: 'prompts/get',
+        params: {
+          name: 'create-deal-with-line-items',
+          arguments: {
+            dealName: 'Pipeline Deal',
+            pipelineId: 'pipeline_123',
+            contactId: 'contact_456',
+          },
+        },
+      })) as { messages: Array<{ content: { text: string } }> };
+
+      const text = result.messages[0].content.text;
+      expect(text).toContain('pipeline_123');
+      expect(text).toContain('contact_456');
+    });
+
+    it('search-crm-records includes query line when query param provided', async () => {
+      // Covers the TRUE branch of queryLine ternary (line 428)
+      const { mockServer, handlers } = buildMockServer();
+      setupPrompts(mockServer);
+
+      const result = (await handlers.get('prompts/get')?.({
+        method: 'prompts/get',
+        params: {
+          name: 'search-crm-records',
+          arguments: {
+            objectType: 'contacts',
+            filterProperty: 'email',
+            filterValue: 'test@example.com',
+            query: 'John',
+          },
+        },
+      })) as { messages: Array<{ content: { text: string } }> };
+
+      const text = result.messages[0].content.text;
+      expect(text).toContain('John');
+    });
+
+    it('handles prompts/get without arguments gracefully', async () => {
+      // Covers the FALSE branch of "if (promptArgs)" (line 527)
+      const { mockServer, handlers } = buildMockServer();
+      setupPrompts(mockServer);
+
+      const result = (await handlers.get('prompts/get')?.({
+        method: 'prompts/get',
+        params: { name: 'search-crm-records' },
+        // arguments deliberately omitted
+      })) as { messages: Array<{ content: { text: string } }> };
+
+      expect(result.messages).toBeDefined();
+      expect(result.messages.length).toBeGreaterThan(0);
+    });
+
+    it('skips undefined values in arguments object', async () => {
+      // Covers the FALSE branch of "if (value !== undefined)" (line 529)
+      const { mockServer, handlers } = buildMockServer();
+      setupPrompts(mockServer);
+
+      const result = (await handlers.get('prompts/get')?.({
+        method: 'prompts/get',
+        params: {
+          name: 'search-crm-records',
+          arguments: {
+            objectType: 'contacts',
+            filterProperty: undefined, // undefined value – should be skipped
+          },
+        },
+      })) as { messages: Array<{ content: { text: string } }> };
+
+      expect(result.messages).toBeDefined();
+      // No error thrown — undefined values are safely skipped
+    });
   });
 });

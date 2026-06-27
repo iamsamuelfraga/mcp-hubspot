@@ -74,6 +74,18 @@ describe('Enrollment Tools', () => {
 
       await expect(tool.handler({ email: 'test@example.com' })).rejects.toThrow();
     });
+
+    it('returns isError when DELETE fails', async () => {
+      mockFetchError({ status: 'error', message: 'Not Found' }, 404);
+      const tool = tools.find((t) => t.name === 'hubspot_enrollment_unenroll')!;
+
+      const result = (await tool.handler({
+        workflowId: 12345,
+        email: 'test@example.com',
+      })) as { isError: boolean };
+
+      expect(result.isError).toBe(true);
+    });
   });
 
   describe('hubspot_enrollment_get_enrollments', () => {
@@ -102,6 +114,15 @@ describe('Enrollment Tools', () => {
       const url = fetchMock.mock.calls[0][0] as string;
       expect(url).toContain('/automation/v3/workflows');
     });
+
+    it('returns isError when GET fails', async () => {
+      mockFetchError({ status: 'error', message: 'Server error' }, 500);
+      const tool = tools.find((t) => t.name === 'hubspot_workflows_v3_list')!;
+
+      const result = (await tool.handler({})) as { isError: boolean };
+
+      expect(result.isError).toBe(true);
+    });
   });
 
   describe('hubspot_workflows_v3_get', () => {
@@ -115,6 +136,15 @@ describe('Enrollment Tools', () => {
       expect(result).toEqual(workflowResponse);
       const url = fetchMock.mock.calls[0][0] as string;
       expect(url).toContain('/automation/v3/workflows/456');
+    });
+
+    it('returns isError when GET fails', async () => {
+      mockFetchError({ status: 'error', message: 'Not Found' }, 404);
+      const tool = tools.find((t) => t.name === 'hubspot_workflows_v3_get')!;
+
+      const result = (await tool.handler({ workflowId: 999 })) as { isError: boolean };
+
+      expect(result.isError).toBe(true);
     });
   });
 });

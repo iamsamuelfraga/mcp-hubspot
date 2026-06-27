@@ -84,5 +84,16 @@ describe('Automation Tools', () => {
 
       await expect(tool.handler({})).rejects.toThrow();
     });
+
+    it('returns isError when POST fails', async () => {
+      mockFetchError({ status: 'error', message: 'Server error' }, 500);
+      const tool = tools.find((t) => t.name === 'hubspot_automation_callback_complete_batch')!;
+
+      const result = (await tool.handler({
+        callbackInputs: [{ callbackId: 'cb-1', outputFields: { hs_execution_state: 'SUCCESS' } }],
+      })) as { isError: boolean };
+
+      expect(result.isError).toBe(true);
+    });
   });
 });

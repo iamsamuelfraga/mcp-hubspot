@@ -740,3 +740,173 @@ describe('CRM tools — objectType coverage', () => {
     await expect(tool.handler({ objectType: 'invoices' })).rejects.toThrow();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Suite: batch error paths (previously uncovered catch branches)
+// ---------------------------------------------------------------------------
+
+describe('hubspot_crm_batch_read — error path', () => {
+  it('returns isError when the API call fails', async () => {
+    mockFetchError({ status: 'error', message: 'Not found' }, 404);
+
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_crm_batch_read');
+
+    const result = (await tool.handler({
+      objectType: 'deals',
+      inputs: [{ id: '999' }],
+    })) as { isError: boolean };
+
+    expect(result.isError).toBe(true);
+  });
+});
+
+describe('hubspot_crm_batch_update — error path', () => {
+  it('returns isError when the API call fails', async () => {
+    mockFetchError({ status: 'error', message: 'Validation error' }, 400);
+
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_crm_batch_update');
+
+    const result = (await tool.handler({
+      objectType: 'deals',
+      inputs: [{ id: '111', properties: { amount: 'invalid' } }],
+    })) as { isError: boolean };
+
+    expect(result.isError).toBe(true);
+  });
+});
+
+describe('hubspot_crm_batch_archive — error path', () => {
+  it('returns isError when the API call fails', async () => {
+    mockFetchError({ status: 'error', message: 'Server error' }, 500);
+
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_crm_batch_archive');
+
+    const result = (await tool.handler({
+      objectType: 'deals',
+      inputs: [{ id: '111' }],
+    })) as { isError: boolean };
+
+    expect(result.isError).toBe(true);
+  });
+});
+
+describe('hubspot_crm_batch_upsert — error path', () => {
+  it('returns isError when the API call fails', async () => {
+    mockFetchError({ status: 'error', message: 'Missing scopes' }, 403);
+
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_crm_batch_upsert');
+
+    const result = (await tool.handler({
+      objectType: 'deals',
+      inputs: [{ idProperty: 'hs_external_id', id: 'ext-001', properties: { dealname: 'Test' } }],
+    })) as { isError: boolean };
+
+    expect(result.isError).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite: more error paths (create, update, batch_create)
+// ---------------------------------------------------------------------------
+
+describe('hubspot_crm_create — error path', () => {
+  it('returns isError when the POST call fails', async () => {
+    mockFetchError({ status: 'error', message: 'Validation error' }, 400);
+
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_crm_create');
+
+    const result = (await tool.handler({
+      objectType: 'deals',
+      properties: { dealname: 'Fail Deal' },
+    })) as { isError: boolean };
+
+    expect(result.isError).toBe(true);
+  });
+});
+
+describe('hubspot_crm_update — error path', () => {
+  it('returns isError when the PATCH call fails', async () => {
+    mockFetchError({ status: 'error', message: 'Not found' }, 404);
+
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_crm_update');
+
+    const result = (await tool.handler({
+      objectType: 'deals',
+      id: '999',
+      properties: { dealname: 'Updated' },
+    })) as { isError: boolean };
+
+    expect(result.isError).toBe(true);
+  });
+});
+
+describe('hubspot_crm_batch_create — error path', () => {
+  it('returns isError when the batch POST call fails', async () => {
+    mockFetchError({ status: 'error', message: 'Server error' }, 500);
+
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_crm_batch_create');
+
+    const result = (await tool.handler({
+      objectType: 'deals',
+      inputs: [{ properties: { dealname: 'Fail Deal' } }],
+    })) as { isError: boolean };
+
+    expect(result.isError).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite: crm_search with after cursor (line 591 branch)
+// ---------------------------------------------------------------------------
+
+describe('hubspot_crm_search — after cursor pagination', () => {
+  it('includes after cursor in the search body when provided', async () => {
+    const fetchMock = mockFetchSuccess({ results: [DEAL_FIXTURE], paging: null });
+
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_crm_search');
+
+    await tool.handler({ objectType: 'deals', after: '100' });
+
+    const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(requestInit.body as string) as { after: string };
+    expect(body.after).toBe('100');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite: crm_batch_read with propertiesWithHistory (line 752 branch)
+// ---------------------------------------------------------------------------
+
+describe('hubspot_crm_batch_read — propertiesWithHistory', () => {
+  it('includes propertiesWithHistory in the request body when provided', async () => {
+    const fetchMock = mockFetchSuccess({
+      status: 'COMPLETE',
+      results: [DEAL_FIXTURE],
+      startedAt: '2025-01-01T00:00:00Z',
+      completedAt: '2025-01-01T00:00:01Z',
+    });
+
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_crm_batch_read');
+
+    await tool.handler({
+      objectType: 'deals',
+      inputs: [{ id: '111' }],
+      propertiesWithHistory: ['amount', 'dealstage'],
+    });
+
+    const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(requestInit.body as string) as {
+      propertiesWithHistory: string[];
+    };
+    expect(body.propertiesWithHistory).toEqual(['amount', 'dealstage']);
+  });
+});

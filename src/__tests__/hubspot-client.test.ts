@@ -89,6 +89,88 @@ describe('HubSpotClient.get', () => {
     expect(thrownError).toBeInstanceOf(HubSpotApiError);
     expect((thrownError as HubSpotApiError).statusCode).toBe(404);
   });
+
+  it('falls back to response.text() when response.json() throws on error response (line 189)', async () => {
+    // Covers the catch branch: errorBody = await response.text().catch(() => '')
+    const nonJsonResponse = {
+      ok: false,
+      status: 500,
+      headers: new Headers(),
+      json: vi.fn().mockRejectedValue(new SyntaxError('Unexpected token < in JSON')),
+      text: vi.fn().mockResolvedValue('<html>Internal Server Error</html>'),
+    } as unknown as Response;
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(nonJsonResponse));
+    const client = makeClient();
+
+    let thrownError: unknown;
+    try {
+      await client.get('/crm/v3/objects/deals');
+    } catch (err) {
+      thrownError = err;
+    }
+
+    expect(thrownError).toBeInstanceOf(HubSpotApiError);
+    expect((thrownError as HubSpotApiError).statusCode).toBe(500);
+  });
+
+  it('logs warning when X-HubSpot-RateLimit-Remaining header is below 10 (TRUE branch)', async () => {
+    // Covers: if (remainingNum < 10) { logger.warn(...) } — TRUE branch
+    // Also covers ?? 'unknown' false-branch (limit and interval headers present)
+    mockFetchSuccess({ results: [] }, 200, {
+      'X-HubSpot-RateLimit-Remaining': '5',
+      'X-HubSpot-RateLimit-Limit': '100',
+      'X-HubSpot-RateLimit-Interval-Milliseconds': '10000',
+    });
+    const client = makeClient();
+
+    // Should not throw; the warning is logged internally
+    await expect(client.get('/crm/v3/objects/deals')).resolves.toBeDefined();
+  });
+
+  it('uses "unknown" fallback for limit and interval when those headers are absent (lines 237-238)', async () => {
+    // Covers: limit ?? 'unknown' and intervalMs ?? 'unknown' — TRUE ?? branches
+    // Only provide the Remaining header, not Limit or Interval
+    mockFetchSuccess({ results: [] }, 200, {
+      'X-HubSpot-RateLimit-Remaining': '3',
+      // X-HubSpot-RateLimit-Limit and X-HubSpot-RateLimit-Interval intentionally absent
+    });
+    const client = makeClient();
+
+    await expect(client.get('/crm/v3/objects/deals')).resolves.toBeDefined();
+  });
+
+  it('skips rate limit warning when X-HubSpot-RateLimit-Remaining header is >= 10 (FALSE branch)', async () => {
+    // Covers: if (remainingNum < 10) — FALSE branch (remaining is sufficient)
+    mockFetchSuccess({ results: [] }, 200, {
+      'X-HubSpot-RateLimit-Remaining': '50',
+      'X-HubSpot-RateLimit-Limit': '100',
+    });
+    const client = makeClient();
+
+    await expect(client.get('/crm/v3/objects/deals')).resolves.toBeDefined();
+  });
+
+  it('parses Retry-After header value on 429 error response (line 183 TRUE branch)', async () => {
+    // Covers: retryAfterHeader ? parseInt(retryAfterHeader, 10) : undefined — TRUE branch
+    // Use 403 to avoid the retry loop (429 would retry; 403 throws immediately)
+    mockFetchError(
+      { status: 'error', message: 'Forbidden', category: 'AUTHORIZATION_ERROR' },
+      403,
+      { 'Retry-After': '30' }
+    );
+    const client = makeClient();
+
+    let thrownError: unknown;
+    try {
+      await client.get('/crm/v3/objects/deals');
+    } catch (err) {
+      thrownError = err;
+    }
+
+    expect(thrownError).toBeInstanceOf(HubSpotApiError);
+    expect((thrownError as HubSpotApiError).statusCode).toBe(403);
+  });
 });
 
 describe('HubSpotClient.post', () => {

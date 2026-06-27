@@ -88,4 +88,13 @@ describe('findToolset', () => {
     const toolsets = ['sales'];
     expect(findToolset('sales/list', toolsets)).toBe('sales');
   });
+
+  it('returns the longest matching toolset when multiple prefixes match', () => {
+    // 'sales_long_list' normalises to 'sales_long_list'.
+    // Both 'sales' (via startsWith('sales_')) and 'sales_long' (via startsWith('sales_long_'))
+    // match — the sort comparator (a, b) => b.length - a.length is invoked here.
+    const toolsets = ['sales', 'sales_long'];
+    const result = findToolset('hubspot_sales_long_list', toolsets);
+    expect(result).toBe('sales_long'); // longest match wins
+  });
 });

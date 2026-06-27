@@ -408,6 +408,40 @@ describe('hubspot_associations_batch_create', () => {
       })
     ).rejects.toThrow();
   });
+
+  it('defaults numErrors to 0 and errors to [] when absent in response', async () => {
+    // Covers the ?? 0 and ?? [] branches (lines 396-397) when API response omits those fields
+    const responseWithoutErrorFields = {
+      status: 'COMPLETE',
+      results: [
+        {
+          fromObjectTypeId: '0-48',
+          fromObjectId: 100,
+          toObjectTypeId: '0-1',
+          toObjectId: 200,
+          labels: [],
+        },
+      ],
+      // numErrors and errors intentionally omitted
+    };
+    mockFetchSuccess(responseWithoutErrorFields);
+    const tool = getTool('hubspot_associations_batch_create');
+
+    const result = (await tool.handler({
+      fromType: 'calls',
+      toType: 'contacts',
+      inputs: [
+        {
+          from: { id: '100' },
+          to: { id: '200' },
+          types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 194 }],
+        },
+      ],
+    })) as Record<string, unknown>;
+
+    expect(result.numErrors).toBe(0);
+    expect(result.errors).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -209,6 +209,17 @@ describe('hubspot_workflows_create', () => {
 
     await expect(tool.handler({ name: 'Missing type flow' })).rejects.toThrow();
   });
+
+  it('returns isError when POST fails', async () => {
+    mockFetchError({ status: 'error', message: 'Server error' }, 500);
+
+    const tool = findTool(tools, 'hubspot_workflows_create');
+    const result = (await tool.handler({ name: 'Test Flow', type: 'DEAL_FLOW' })) as {
+      isError: boolean;
+    };
+
+    expect(result.isError).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -259,6 +270,17 @@ describe('hubspot_workflows_update', () => {
     const body = JSON.parse(requestInit.body as string) as Record<string, unknown>;
     expect(body).not.toHaveProperty('flowId');
     expect(body.name).toBe('Updated Flow');
+  });
+
+  it('returns isError when PUT fails', async () => {
+    mockFetchError({ status: 'error', message: 'Not Found' }, 404);
+
+    const tool = findTool(tools, 'hubspot_workflows_update');
+    const result = (await tool.handler({ flowId: 'missing_flow', name: 'Updated' })) as {
+      isError: boolean;
+    };
+
+    expect(result.isError).toBe(true);
   });
 });
 
@@ -377,6 +399,28 @@ describe('hubspot_workflows_batch_read', () => {
     const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
     expect(calledUrl).toContain('/automation/v4/flows/batch/read');
     expect(requestInit.method).toBe('POST');
+  });
+
+  it('returns isError when batch read POST fails', async () => {
+    mockFetchError({ status: 'error', message: 'Server error' }, 500);
+
+    const tool = findTool(tools, 'hubspot_workflows_batch_read');
+    const result = (await tool.handler({ flowIds: ['flow_001', 'flow_002'] })) as {
+      isError: boolean;
+    };
+
+    expect(result.isError).toBe(true);
+  });
+
+  it('defaults numErrors to 0 and errors to [] when absent in response', async () => {
+    // Covers the ?? 0 and ?? [] branches (lines 483-484) when API omits those fields
+    mockFetchSuccess({ results: [sampleFlow], status: 'COMPLETE' });
+
+    const tool = findTool(tools, 'hubspot_workflows_batch_read');
+    const result = (await tool.handler({ flowIds: ['flow_001'] })) as Record<string, unknown>;
+
+    expect(result.numErrors).toBe(0);
+    expect(result.errors).toEqual([]);
   });
 });
 
@@ -542,6 +586,17 @@ describe('hubspot_workflows_id_mappings', () => {
     const result = (await tool.handler({ workflowIds: [12345] })) as { isError: boolean };
 
     expect(result.isError).toBe(true);
+  });
+
+  it('defaults numErrors to 0 and errors to [] when absent in response', async () => {
+    // Covers the ?? 0 and ?? [] branches (lines 635-636) when API omits those fields
+    mockFetchSuccess({ results: [{ v3WorkflowId: 111, v4FlowId: 'flow_v4' }], status: 'COMPLETE' });
+
+    const tool = findTool(tools, 'hubspot_workflows_id_mappings');
+    const result = (await tool.handler({ workflowIds: [111] })) as Record<string, unknown>;
+
+    expect(result.numErrors).toBe(0);
+    expect(result.errors).toEqual([]);
   });
 });
 

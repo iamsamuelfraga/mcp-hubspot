@@ -76,6 +76,42 @@ describe('withRetry', () => {
     expect(fn).toHaveBeenCalledTimes(1); // No retries
   });
 
+  it('treats plain Error (no statusCode) as non-retryable and throws immediately (line 79 FALSE branch)', async () => {
+    // Covers: (error instanceof Error && 'statusCode' in error) → FALSE
+    // A plain Error lacks the statusCode property → statusCode = undefined → isRetryable = false
+    const plainError = new Error('plain error without statusCode');
+    const fn = vi.fn().mockRejectedValue(plainError);
+
+    await expect(
+      withRetry(fn, { maxRetries: 3, initialDelay: 100, jitter: false })
+    ).rejects.toThrow('plain error without statusCode');
+    expect(fn).toHaveBeenCalledTimes(1); // No retries on non-retryable error
+  });
+
+  it('retries a custom 429-like error that lacks retryAfter property (line 99 FALSE branch)', async () => {
+    // Covers: (error instanceof Error && 'retryAfter' in error) → FALSE
+    // A custom error with statusCode=429 but no retryAfter property → retryAfterSeconds = undefined
+    // The retry uses exponential backoff instead of the Retry-After value
+    vi.useFakeTimers();
+    const customRateLimitError = Object.assign(new Error('Too Many Requests'), { statusCode: 429 });
+    const fn = vi
+      .fn()
+      .mockRejectedValueOnce(customRateLimitError)
+      .mockResolvedValue('ok after retry');
+
+    const resultPromise = withRetry(fn, {
+      maxRetries: 2,
+      initialDelay: 100,
+      jitter: false,
+    });
+    await vi.runAllTimersAsync();
+    const result = await resultPromise;
+
+    expect(result).toBe('ok after retry');
+    expect(fn).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
   it('does not retry on a non-retryable 401 error', async () => {
     const authError = new HubSpotApiError('Unauthorized', 401, '/path');
     const fn = vi.fn().mockRejectedValue(authError);
@@ -139,5 +175,17 @@ describe('withRetry', () => {
     // With jitter, not all delays should be identical
     const uniqueDelays = new Set(delays.map((d) => Math.round(d)));
     expect(uniqueDelays.size).toBeGreaterThan(1);
+  });
+
+  it('throws "Retry failed with no error captured" when maxRetries is negative', async () => {
+    // Covers the "unreachable" line 129: with maxRetries=-1 the for loop
+    // condition (0 <= -1) is false immediately so the loop body never runs,
+    // lastError stays undefined, and the fallback throw executes.
+    const fn = vi.fn().mockResolvedValue('should not be called');
+
+    await expect(withRetry(fn, { maxRetries: -1 })).rejects.toThrow(
+      'Retry failed with no error captured'
+    );
+    expect(fn).not.toHaveBeenCalled();
   });
 });

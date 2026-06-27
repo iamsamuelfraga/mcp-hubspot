@@ -470,4 +470,33 @@ describe('hubspot_quotes_assemble', () => {
     };
     expect(body.properties.hs_status).toBe('APPROVAL_NOT_NEEDED');
   });
+
+  it('sets sender-related optional properties when provided', async () => {
+    // Covers branches: senderLastName (line 395), senderFirstName, senderEmail, paymentEnabled, quoteNumber
+    const fetchMock = mockFetchSuccess(QUOTE_FIXTURE);
+
+    const tools = makeTools();
+    const tool = getTool(tools, 'hubspot_quotes_assemble');
+
+    await tool.handler({
+      title: 'Sender Quote',
+      dealId: '300',
+      lineItemIds: ['401'],
+      senderFirstName: 'John',
+      senderLastName: 'Doe',
+      senderEmail: 'john.doe@example.com',
+      paymentEnabled: true,
+      quoteNumber: 'Q-2026-001',
+    });
+
+    const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(requestInit.body as string) as {
+      properties: Record<string, string>;
+    };
+    expect(body.properties['hs_sender_firstname']).toBe('John');
+    expect(body.properties['hs_sender_lastname']).toBe('Doe');
+    expect(body.properties['hs_sender_email']).toBe('john.doe@example.com');
+    expect(body.properties['hs_payment_enabled']).toBe('true');
+    expect(body.properties['hs_quote_number']).toBe('Q-2026-001');
+  });
 });

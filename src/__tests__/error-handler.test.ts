@@ -131,4 +131,110 @@ describe('handleToolError', () => {
     const result = handleToolError(error);
     expect(result.content[0].text).toContain('corr-id-456');
   });
+
+  it('includes validation error details when errors array is populated', () => {
+    const error = new HubSpotApiError(
+      'Validation error',
+      400,
+      '/crm/v3/objects/deals',
+      'VALIDATION_ERROR',
+      undefined,
+      [
+        { message: 'dealname is required', code: 'REQUIRED' },
+        { message: 'amount must be a number', code: 'INVALID_VALUE' },
+      ]
+    );
+    const result = handleToolError(error);
+    expect(result.content[0].text).toContain('Details:');
+    expect(result.content[0].text).toContain('dealname is required (REQUIRED)');
+    expect(result.content[0].text).toContain('amount must be a number (INVALID_VALUE)');
+  });
+
+  it('includes error details without code when code is absent', () => {
+    const error = new HubSpotApiError('Validation error', 400, '/endpoint', undefined, undefined, [
+      { message: 'Something went wrong' },
+    ]);
+    const result = handleToolError(error);
+    expect(result.content[0].text).toContain('Something went wrong');
+    // No trailing code in parentheses
+    expect(result.content[0].text).not.toMatch(/Something went wrong \(/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// toUserFriendlyMessage — direct coverage of error detail formatting
+// ---------------------------------------------------------------------------
+
+describe('HubSpotApiError.toUserFriendlyMessage', () => {
+  it('includes Details section with error messages and codes', () => {
+    const error = new HubSpotApiError(
+      'Bad request',
+      400,
+      '/crm/v3/objects/deals',
+      'VALIDATION_ERROR',
+      'corr-999',
+      [
+        { message: 'Field is required', code: 'REQUIRED' },
+        { message: 'Invalid format' }, // no code
+      ]
+    );
+
+    const msg = error.toUserFriendlyMessage();
+
+    expect(msg).toContain('Details:');
+    expect(msg).toContain('  - Field is required (REQUIRED)');
+    expect(msg).toContain('  - Invalid format');
+    expect(msg).not.toContain('  - Invalid format (');
+  });
+
+  it('skips error entries that have no message', () => {
+    const error = new HubSpotApiError(
+      'Bad request',
+      400,
+      '/endpoint',
+      undefined,
+      undefined,
+      [{ code: 'SOME_CODE' }] // message is undefined
+    );
+
+    const msg = error.toUserFriendlyMessage();
+    // Details header should still appear because errors array is non-empty
+    expect(msg).toContain('Details:');
+    // But no bullet points for the entry without a message
+    expect(msg).not.toContain('SOME_CODE)');
+  });
+
+  it('does not include Details section when errors array is empty', () => {
+    const error = new HubSpotApiError('Not found', 404, '/endpoint', undefined, undefined, []);
+    const msg = error.toUserFriendlyMessage();
+    expect(msg).not.toContain('Details:');
+  });
+
+  it('includes retryAfter in 429 message when provided', () => {
+    const error = new HubSpotApiError(
+      'Too Many Requests',
+      429,
+      '/endpoint',
+      undefined,
+      undefined,
+      undefined,
+      15
+    );
+    const msg = error.toUserFriendlyMessage();
+    expect(msg).toContain('Retry after 15s');
+  });
+
+  it('formats 500+ status codes as server error', () => {
+    const error = new HubSpotApiError('Internal Server Error', 503, '/endpoint');
+    const msg = error.toUserFriendlyMessage();
+    expect(msg).toContain('HubSpot server error');
+  });
+
+  it('omits Endpoint line when endpoint is undefined', () => {
+    // Covers the false branch of: if (this.endpoint) { parts.push(...) }
+    const error = new HubSpotApiError('Validation error', 400);
+    const msg = error.toUserFriendlyMessage();
+    expect(msg).not.toContain('Endpoint:');
+    expect(msg).toContain('Error: Validation error');
+  });
 });
