@@ -19,7 +19,7 @@ describe('getEnabledToolsets', () => {
     delete process.env['HUBSPOT_TOOLSETS'];
     const result = getEnabledToolsets();
     expect(result).toEqual([...HUBSPOT_TOOLSETS]);
-    expect(result).toHaveLength(6);
+    expect(result).toHaveLength(7);
   });
 
   it('returns only the specified toolsets when HUBSPOT_TOOLSETS is set', () => {

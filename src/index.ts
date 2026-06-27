@@ -32,12 +32,15 @@ import { getPropertiesTools } from './tools/properties/index.js';
 import { getWorkflowsTools } from './tools/workflows/index.js';
 import { getAutomationTools } from './tools/automation/index.js';
 import { getEnrollmentTools } from './tools/enrollment/index.js';
+import { getActionsTools } from './tools/actions/index.js';
 import { setupResources } from './resources/index.js';
 import { setupPrompts } from './prompts/index.js';
 
 // ─── Environment validation ──────────────────────────────────────────────────
 
 const ACCESS_TOKEN = process.env['HUBSPOT_ACCESS_TOKEN'];
+const DEVELOPER_API_KEY = process.env['HUBSPOT_DEVELOPER_API_KEY'];
+const APP_ID = process.env['HUBSPOT_APP_ID'];
 
 if (!ACCESS_TOKEN) {
   console.error('Error: HUBSPOT_ACCESS_TOKEN environment variable is required');
@@ -65,7 +68,7 @@ if (!ACCESS_TOKEN) {
 
 // ─── Client initialization ───────────────────────────────────────────────────
 
-const client = new HubSpotClient({ accessToken: ACCESS_TOKEN });
+const client = new HubSpotClient({ accessToken: ACCESS_TOKEN, developerApiKey: DEVELOPER_API_KEY });
 
 // ─── Tool registration ───────────────────────────────────────────────────────
 
@@ -92,7 +95,7 @@ interface ToolGroup {
  * @returns Array of tool groups with explicit toolset membership.
  */
 function registerToolGroups(client: HubSpotClient): ToolGroup[] {
-  return [
+  const groups: ToolGroup[] = [
     // Generic CRM CRUD/search/batch — shared backbone for sales + engagements objects.
     { toolsets: ['sales', 'engagements'], tools: getCrmTools(client) },
     // Sales-specific helpers (deals merge, quotes assemble).
@@ -106,6 +109,19 @@ function registerToolGroups(client: HubSpotClient): ToolGroup[] {
       tools: [...getAutomationTools(client), ...getEnrollmentTools(client)],
     },
   ];
+
+  // Custom Workflow Actions require a developer API key (hapikey) and are only
+  // registered when HUBSPOT_DEVELOPER_API_KEY is set in the environment.
+  if (DEVELOPER_API_KEY) {
+    groups.push({
+      toolsets: ['actions' as HubSpotToolset],
+      tools: getActionsTools(client, APP_ID),
+    });
+  } else {
+    logger.debug('actions toolset disabled: HUBSPOT_DEVELOPER_API_KEY not set');
+  }
+
+  return groups;
 }
 
 // Build the tool registry, filtering by enabled toolsets.

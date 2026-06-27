@@ -32,6 +32,12 @@ export interface HubSpotClientConfig {
   accessToken: string;
   /** Base URL for HubSpot API. Default: 'https://api.hubapi.com'. */
   baseUrl?: string;
+  /**
+   * HubSpot Developer API key (hapikey). Required for developer-scoped APIs
+   * such as Custom Workflow Actions (/automation/v4/actions).
+   * Set via the HUBSPOT_DEVELOPER_API_KEY environment variable.
+   */
+  developerApiKey?: string;
 }
 
 /**
@@ -51,6 +57,15 @@ export interface RequestOptions {
   body?: unknown;
   /** When true, uses the search-specific rate limiter instead of the general one. */
   useSearchLimiter?: boolean;
+  /**
+   * Authentication strategy for this request.
+   *
+   * - `'bearer'` (default) – sends `Authorization: Bearer <accessToken>` header.
+   * - `'developer'` – appends `hapikey=<developerApiKey>` as a query param.
+   *   No Authorization header is sent. Requires `developerApiKey` to be set
+   *   in the client config.
+   */
+  auth?: 'bearer' | 'developer';
 }
 
 /**
@@ -63,6 +78,8 @@ export interface RequestOptions {
 export class HubSpotClient {
   private readonly accessToken: string;
   private readonly baseUrl: string;
+  /** Developer API key for hapikey-authenticated endpoints (e.g., Custom Actions). */
+  private readonly developerApiKey?: string;
 
   /**
    * Creates a new HubSpotClient.
@@ -72,6 +89,7 @@ export class HubSpotClient {
   constructor(config: HubSpotClientConfig) {
     this.accessToken = config.accessToken;
     this.baseUrl = config.baseUrl?.replace(/\/$/, '') ?? 'https://api.hubapi.com';
+    this.developerApiKey = config.developerApiKey;
   }
 
   /**
@@ -98,7 +116,7 @@ export class HubSpotClient {
    * });
    */
   async request<T>(options: RequestOptions): Promise<T> {
-    const { method, path, query, body, useSearchLimiter = false } = options;
+    const { method, path, query, body, useSearchLimiter = false, auth = 'bearer' } = options;
     const endpoint = path;
     const startTime = Date.now();
 
@@ -112,6 +130,14 @@ export class HubSpotClient {
       }
     }
 
+    // Developer auth: append hapikey as a query param (no Authorization header).
+    if (auth === 'developer') {
+      if (!this.developerApiKey) {
+        throw new Error('Developer API key not configured. Set HUBSPOT_DEVELOPER_API_KEY env var.');
+      }
+      url.searchParams.set('hapikey', this.developerApiKey);
+    }
+
     const limiter = useSearchLimiter ? searchLimiter : generalLimiter;
     let success = false;
 
@@ -120,9 +146,13 @@ export class HubSpotClient {
         () =>
           limiter.schedule(async () => {
             const headers: Record<string, string> = {
-              Authorization: `Bearer ${this.accessToken}`,
               Accept: 'application/json',
             };
+
+            // Bearer auth: set Authorization header (default for all non-developer calls).
+            if (auth !== 'developer') {
+              headers['Authorization'] = `Bearer ${this.accessToken}`;
+            }
 
             // Only set Content-Type for requests that send a body
             if (body !== undefined && ['POST', 'PATCH', 'PUT'].includes(method)) {
