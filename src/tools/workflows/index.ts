@@ -467,7 +467,8 @@ function buildBatchReadWorkflowsTool(client: HubSpotClient): Tool {
 
       try {
         const body = {
-          inputs: args.flowIds.map((id) => ({ flowId: id })),
+          // HubSpot requires each input to carry the discriminator `type: 'FLOW_ID'`.
+          inputs: args.flowIds.map((id) => ({ flowId: id, type: 'FLOW_ID' as const })),
         };
         const response = await client.post<{
           results: unknown[];

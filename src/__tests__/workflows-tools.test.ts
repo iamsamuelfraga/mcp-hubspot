@@ -380,13 +380,13 @@ describe('hubspot_workflows_batch_read', () => {
 
     const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
     const body = JSON.parse(requestInit.body as string) as {
-      inputs: Array<{ flowId: string }>;
+      inputs: Array<{ flowId: string; type: string }>;
     };
 
     expect(body.inputs).toHaveLength(3);
-    expect(body.inputs[0]).toEqual({ flowId: 'flow_001' });
-    expect(body.inputs[1]).toEqual({ flowId: 'flow_002' });
-    expect(body.inputs[2]).toEqual({ flowId: 'flow_003' });
+    expect(body.inputs[0]).toEqual({ flowId: 'flow_001', type: 'FLOW_ID' });
+    expect(body.inputs[1]).toEqual({ flowId: 'flow_002', type: 'FLOW_ID' });
+    expect(body.inputs[2]).toEqual({ flowId: 'flow_003', type: 'FLOW_ID' });
   });
 
   it('sends POST to /automation/v4/flows/batch/read', async () => {
