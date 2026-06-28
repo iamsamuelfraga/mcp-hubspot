@@ -1,15 +1,15 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/draft/server.schema.json",
-  "name": "io.github.iamsamuelfraga/mcp-hubspot",
+  "name": "io.github.nubiia-dev/mcp-hubspot",
   "description": "Enterprise-grade HubSpot CRM integration with 37 MCP tools for sales, workflows, and automation (+ 16 conditional actions tools with developer key = 53 total)",
   "version": "0.1.0",
-  "homepage": "https://github.com/iamsamuelfraga/mcp-hubspot",
+  "homepage": "https://github.com/nubiia-dev/mcp-hubspot",
   "license": "MIT",
   "author": {
     "name": "Samuel Fraga",
     "url": "https://github.com/iamsamuelfraga"
   },
-  "sourceCode": "https://github.com/iamsamuelfraga/mcp-hubspot",
+  "sourceCode": "https://github.com/nubiia-dev/mcp-hubspot",
   "package": {
     "registryType": "npm",
     "identifier": "@nubiia/mcp-hubspot",

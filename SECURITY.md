@@ -24,7 +24,7 @@ Send a detailed report to:
 
 Or use GitHub's private security advisory feature:
 
-1. Go to the [Security tab](https://github.com/iamsamuelfraga/mcp-hubspot/security)
+1. Go to the [Security tab](https://github.com/nubiia-dev/mcp-hubspot/security)
 2. Click "Report a vulnerability"
 3. Fill out the form with details
 
@@ -295,7 +295,7 @@ return handleToolError(error);
 When we fix a security vulnerability:
 
 1. **Patch Released**: Fix is deployed in a new version
-2. **Security Advisory**: Published on [GitHub Security Advisories](https://github.com/iamsamuelfraga/mcp-hubspot/security/advisories)
+2. **Security Advisory**: Published on [GitHub Security Advisories](https://github.com/nubiia-dev/mcp-hubspot/security/advisories)
 3. **Notification**: Users notified through GitHub releases and npm
 4. **Credit**: Reporter credited (if desired) in the advisory
 
@@ -319,7 +319,7 @@ We recognise security researchers who responsibly disclose vulnerabilities:
 
 For security-related questions that are not vulnerabilities:
 
-- Open a [GitHub Discussion](https://github.com/iamsamuelfraga/mcp-hubspot/discussions)
+- Open a [GitHub Discussion](https://github.com/nubiia-dev/mcp-hubspot/discussions)
 - Tag with the `security` label
 - Or email security@iamsamuelfraga.dev
 
