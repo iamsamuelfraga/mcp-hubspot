@@ -19,13 +19,20 @@ describe('getEnabledToolsets', () => {
     delete process.env['HUBSPOT_TOOLSETS'];
     const result = getEnabledToolsets();
     expect(result).toEqual([...HUBSPOT_TOOLSETS]);
-    expect(result).toHaveLength(8);
+    expect(result).toHaveLength(10);
   });
 
   it('includes the owners toolset and resolves owners_* tool names to it', () => {
     expect([...HUBSPOT_TOOLSETS]).toContain('owners');
     expect(findToolset('hubspot_owners_list', HUBSPOT_TOOLSETS)).toBe('owners');
     expect(findToolset('hubspot_owners_get', HUBSPOT_TOOLSETS)).toBe('owners');
+  });
+
+  it('includes the pipelines and schemas toolsets and resolves their tool names', () => {
+    expect([...HUBSPOT_TOOLSETS]).toContain('pipelines');
+    expect([...HUBSPOT_TOOLSETS]).toContain('schemas');
+    expect(findToolset('hubspot_pipelines_get_stages', HUBSPOT_TOOLSETS)).toBe('pipelines');
+    expect(findToolset('hubspot_schemas_list', HUBSPOT_TOOLSETS)).toBe('schemas');
   });
 
   it('returns only the specified toolsets when HUBSPOT_TOOLSETS is set', () => {

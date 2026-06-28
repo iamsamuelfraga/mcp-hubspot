@@ -34,6 +34,8 @@ import { getAutomationTools } from './tools/automation/index.js';
 import { getEnrollmentTools } from './tools/enrollment/index.js';
 import { getActionsTools } from './tools/actions/index.js';
 import { getOwnersTools } from './tools/owners/index.js';
+import { getPipelinesTools } from './tools/pipelines/index.js';
+import { getSchemasTools } from './tools/schemas/index.js';
 import { setupResources } from './resources/index.js';
 import { setupPrompts } from './prompts/index.js';
 
@@ -105,6 +107,10 @@ function registerToolGroups(client: HubSpotClient): ToolGroup[] {
     { toolsets: ['properties'], tools: getPropertiesTools(client) },
     // Owners — resolve hubspot_owner_id values to real users (name/email).
     { toolsets: ['owners'], tools: getOwnersTools(client) },
+    // Pipelines — resolve dealstage / ticket stage ids to readable stages.
+    { toolsets: ['pipelines'], tools: getPipelinesTools(client) },
+    // Schemas — manage custom object type definitions.
+    { toolsets: ['schemas'], tools: getSchemasTools(client) },
     { toolsets: ['workflows'], tools: getWorkflowsTools(client) },
     // Automation runtime (callbacks) + workflow enrollment + legacy v3 reads.
     {
@@ -145,7 +151,7 @@ for (const group of registerToolGroups(client)) {
 const server = new Server(
   {
     name: 'hubspot-mcp',
-    version: '0.2.0',
+    version: '0.3.0',
   },
   {
     capabilities: {

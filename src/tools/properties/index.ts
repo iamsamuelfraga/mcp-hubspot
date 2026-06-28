@@ -4,6 +4,15 @@
  * Provides MCP tools for discovering and managing CRM object properties.
  * Properties define the fields available on HubSpot CRM records.
  *
+ * Tools:
+ * - `hubspot_properties_list` — list properties of an object type.
+ * - `hubspot_properties_get` — retrieve a single property definition.
+ * - `hubspot_properties_create` — create a custom property.
+ * - `hubspot_properties_update` — update an existing property.
+ * - `hubspot_properties_archive` — archive (delete) a property definition.
+ * - `hubspot_properties_groups_list` — list property groups of an object type.
+ * - `hubspot_properties_groups_create` — create a property group.
+ *
  * @see {@link https://developers.hubspot.com/docs/api/crm/properties}
  */
 import { type HubSpotClient } from '../../hubspot-client.js';
@@ -13,6 +22,10 @@ import {
   ListPropertiesSchema,
   GetPropertySchema,
   CreatePropertySchema,
+  UpdatePropertySchema,
+  ArchivePropertySchema,
+  ListPropertyGroupsSchema,
+  CreatePropertyGroupSchema,
 } from '../../schemas/properties.js';
 
 // ---------------------------------------------------------------------------
@@ -327,6 +340,351 @@ function buildCreatePropertyTool(client: HubSpotClient): Tool {
 }
 
 // ---------------------------------------------------------------------------
+// Tool: hubspot_properties_update
+// ---------------------------------------------------------------------------
+
+/**
+ * Updates an existing property on a CRM object type.
+ * Corresponds to PATCH /crm/v3/properties/{objectType}/{propertyName}.
+ */
+function buildUpdatePropertyTool(client: HubSpotClient): Tool {
+  return {
+    name: 'hubspot_properties_update',
+    description:
+      'Update an existing HubSpot CRM property. ' +
+      "Use this to change a property's label, description, group, options, display order, " +
+      'or visibility. Only the fields you provide are modified.\n\n' +
+      'Note: the internal property "name" cannot be changed after creation — it is used here ' +
+      'only to identify which property to update.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        objectType: {
+          type: 'string',
+          minLength: 1,
+          description:
+            'CRM object type the property belongs to (e.g., "contacts", "deals", "companies")',
+        },
+        propertyName: {
+          type: 'string',
+          minLength: 1,
+          description:
+            'Internal name of the property to update (e.g., "custom_priority"). ' +
+            'The name itself cannot be changed.',
+        },
+        label: {
+          type: 'string',
+          minLength: 1,
+          description: 'New display label shown in HubSpot UI and reports',
+        },
+        description: {
+          type: 'string',
+          description: 'New description explaining the purpose of this property',
+        },
+        groupName: {
+          type: 'string',
+          minLength: 1,
+          description: 'Move the property to a different property group (e.g., "dealinformation")',
+        },
+        type: {
+          type: 'string',
+          enum: [
+            'string',
+            'number',
+            'date',
+            'datetime',
+            'enumeration',
+            'bool',
+            'json',
+            'object_coordinates',
+            'phone_number',
+          ],
+          description:
+            'Data type. Common values: "string", "number", "date", "datetime", "enumeration", "bool".',
+        },
+        fieldType: {
+          type: 'string',
+          enum: [
+            'textarea',
+            'text',
+            'date',
+            'file',
+            'number',
+            'select',
+            'radio',
+            'checkbox',
+            'booleancheckbox',
+            'calculation_equation',
+            'html',
+            'phonenumber',
+          ],
+          description: 'UI rendering type. Must be compatible with the chosen "type" field.',
+        },
+        options: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              label: {
+                type: 'string',
+                minLength: 1,
+                description: 'Display label for this option',
+              },
+              value: {
+                type: 'string',
+                minLength: 1,
+                description: 'Internal value (must be unique within this property)',
+              },
+              displayOrder: {
+                type: 'integer',
+                description: 'Position in the dropdown (lower = first)',
+              },
+              hidden: {
+                type: 'boolean',
+                default: false,
+                description: 'Whether to hide this option',
+              },
+            },
+            required: ['label', 'value'],
+            additionalProperties: false,
+          },
+          description:
+            'Replacement set of selectable options (for enumeration properties). ' +
+            'Each option needs a unique value and a display label.',
+        },
+        displayOrder: {
+          type: 'integer',
+          description: 'Position of this property in forms and records (lower = earlier)',
+        },
+        hidden: {
+          type: 'boolean',
+          description: 'Whether to hide this property in the UI',
+        },
+        formField: {
+          type: 'boolean',
+          description: 'Whether this property can be used in HubSpot forms',
+        },
+      },
+      required: ['objectType', 'propertyName'],
+      additionalProperties: false,
+    },
+    handler: async (rawArgs: unknown) => {
+      const args = UpdatePropertySchema.parse(rawArgs);
+
+      try {
+        // Build the request body — extract path segments. The property `name`
+        // cannot change, so only the remaining provided fields are sent.
+        const { objectType, propertyName, ...propertyBody } = args;
+
+        const response = await client.patch<{
+          name: string;
+          label: string;
+          type: string;
+          fieldType: string;
+          groupName: string;
+          description: string;
+          options?: { label: string; value: string }[];
+          createdAt: string;
+          updatedAt: string;
+          archived: boolean;
+          hubspotDefined: boolean;
+        }>(
+          `/crm/v3/properties/${encodeURIComponent(objectType)}/${encodeURIComponent(propertyName)}`,
+          propertyBody
+        );
+
+        return response;
+      } catch (error) {
+        return handleToolError(error);
+      }
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tool: hubspot_properties_archive
+// ---------------------------------------------------------------------------
+
+/**
+ * Archives (deletes) a property definition from a CRM object type.
+ * Corresponds to DELETE /crm/v3/properties/{objectType}/{propertyName}.
+ */
+function buildArchivePropertyTool(client: HubSpotClient): Tool {
+  return {
+    name: 'hubspot_properties_archive',
+    description:
+      'Archive (delete) a HubSpot CRM property definition. ' +
+      'This removes the property from the object type — it can no longer be set or displayed on ' +
+      'records. Default HubSpot properties cannot be archived. ' +
+      'Use with caution: archiving a property hides its stored values from the UI.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        objectType: {
+          type: 'string',
+          minLength: 1,
+          description:
+            'CRM object type the property belongs to (e.g., "contacts", "deals", "companies")',
+        },
+        propertyName: {
+          type: 'string',
+          minLength: 1,
+          description: 'Internal name of the property to archive/delete (e.g., "custom_priority")',
+        },
+      },
+      required: ['objectType', 'propertyName'],
+      additionalProperties: false,
+    },
+    handler: async (rawArgs: unknown) => {
+      const args = ArchivePropertySchema.parse(rawArgs);
+
+      try {
+        await client.delete(
+          `/crm/v3/properties/${encodeURIComponent(args.objectType)}/${encodeURIComponent(args.propertyName)}`
+        );
+
+        return {
+          objectType: args.objectType,
+          propertyName: args.propertyName,
+          archived: true,
+        };
+      } catch (error) {
+        return handleToolError(error);
+      }
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tool: hubspot_properties_groups_list
+// ---------------------------------------------------------------------------
+
+/**
+ * Lists all property groups defined for a CRM object type.
+ * Corresponds to GET /crm/v3/properties/{objectType}/groups.
+ */
+function buildListPropertyGroupsTool(client: HubSpotClient): Tool {
+  return {
+    name: 'hubspot_properties_groups_list',
+    description:
+      'List the property groups defined for a HubSpot CRM object type. ' +
+      'Property groups organize related properties into sections in the UI (e.g., ' +
+      '"dealinformation"). Use this to discover valid groupName values before creating or ' +
+      'updating a property.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        objectType: {
+          type: 'string',
+          minLength: 1,
+          description:
+            'CRM object type whose property groups to list (e.g., "contacts", "deals", "companies")',
+        },
+        archived: {
+          type: 'boolean',
+          default: false,
+          description: 'Whether to include archived (deleted) property groups. Default false.',
+        },
+      },
+      required: ['objectType'],
+      additionalProperties: false,
+    },
+    handler: async (rawArgs: unknown) => {
+      const args = ListPropertyGroupsSchema.parse(rawArgs);
+
+      try {
+        const response = await client.get<{
+          results: {
+            name: string;
+            label: string;
+            displayOrder: number;
+            archived?: boolean;
+          }[];
+        }>(`/crm/v3/properties/${encodeURIComponent(args.objectType)}/groups`, {
+          archived: args.archived,
+        });
+
+        return {
+          objectType: args.objectType,
+          results: response.results,
+          total: response.results.length,
+        };
+      } catch (error) {
+        return handleToolError(error);
+      }
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tool: hubspot_properties_groups_create
+// ---------------------------------------------------------------------------
+
+/**
+ * Creates a new property group on a CRM object type.
+ * Corresponds to POST /crm/v3/properties/{objectType}/groups.
+ */
+function buildCreatePropertyGroupTool(client: HubSpotClient): Tool {
+  return {
+    name: 'hubspot_properties_groups_create',
+    description:
+      'Create a new property group on a HubSpot CRM object type. ' +
+      'Property groups organize related properties into sections in the UI. ' +
+      'After creating a group, reference its "name" as the groupName of new properties.\n\n' +
+      'Note: group names must be lowercase with underscores (e.g., "my_group").',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        objectType: {
+          type: 'string',
+          minLength: 1,
+          description:
+            'CRM object type to add the property group to (e.g., "contacts", "deals", "companies")',
+        },
+        name: {
+          type: 'string',
+          minLength: 1,
+          pattern: '^[a-z0-9_]+$',
+          description:
+            'Internal group name (lowercase letters, numbers, underscores only). ' +
+            'Referenced as the groupName of properties.',
+        },
+        label: {
+          type: 'string',
+          minLength: 1,
+          description: 'Display label shown in HubSpot UI',
+        },
+        displayOrder: {
+          type: 'integer',
+          description: 'Position of this group in the UI (lower = earlier)',
+        },
+      },
+      required: ['objectType', 'name', 'label'],
+      additionalProperties: false,
+    },
+    handler: async (rawArgs: unknown) => {
+      const args = CreatePropertyGroupSchema.parse(rawArgs);
+
+      try {
+        // Build the request body — extract objectType from the path segment
+        const { objectType, ...groupBody } = args;
+
+        const response = await client.post<{
+          name: string;
+          label: string;
+          displayOrder: number;
+          archived: boolean;
+        }>(`/crm/v3/properties/${encodeURIComponent(objectType)}/groups`, groupBody);
+
+        return response;
+      } catch (error) {
+        return handleToolError(error);
+      }
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Domain entry point
 // ---------------------------------------------------------------------------
 
@@ -341,5 +699,9 @@ export function getPropertiesTools(client: HubSpotClient): Tool[] {
     buildListPropertiesTool(client),
     buildGetPropertyTool(client),
     buildCreatePropertyTool(client),
+    buildUpdatePropertyTool(client),
+    buildArchivePropertyTool(client),
+    buildListPropertyGroupsTool(client),
+    buildCreatePropertyGroupTool(client),
   ];
 }
