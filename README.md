@@ -1,6 +1,6 @@
-# @iamsamuelfraga/mcp-hubspot
+# @nubiia/mcp-hubspot
 
-[![npm version](https://img.shields.io/npm/v/@iamsamuelfraga/mcp-hubspot.svg)](https://www.npmjs.com/package/@iamsamuelfraga/mcp-hubspot)
+[![npm version](https://img.shields.io/npm/v/@nubiia/mcp-hubspot.svg)](https://www.npmjs.com/package/@nubiia/mcp-hubspot)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js >=20](https://img.shields.io/badge/node-%3E%3D20.18.0-brightgreen.svg)](https://nodejs.org)
 
@@ -55,13 +55,13 @@ A Model Context Protocol (MCP) server that gives Claude comprehensive, enterpris
 ### Global install
 
 ```bash
-npm install -g @iamsamuelfraga/mcp-hubspot
+npm install -g @nubiia/mcp-hubspot
 ```
 
 ### Via npx (no install needed)
 
 ```bash
-npx @iamsamuelfraga/mcp-hubspot
+npx @nubiia/mcp-hubspot
 ```
 
 ---
@@ -90,7 +90,7 @@ Add the server to your Claude Desktop config file:
   "mcpServers": {
     "hubspot": {
       "command": "npx",
-      "args": ["-y", "@iamsamuelfraga/mcp-hubspot"],
+      "args": ["-y", "@nubiia/mcp-hubspot"],
       "env": {
         "HUBSPOT_ACCESS_TOKEN": "pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
       }
@@ -129,7 +129,7 @@ Grant only the scopes your use-case needs:
   "mcpServers": {
     "hubspot": {
       "command": "npx",
-      "args": ["-y", "@iamsamuelfraga/mcp-hubspot"],
+      "args": ["-y", "@nubiia/mcp-hubspot"],
       "env": {
         "HUBSPOT_ACCESS_TOKEN": "pat-na1-...",
         "HUBSPOT_TOOLSETS": "sales,properties"
@@ -252,7 +252,7 @@ query string), not the Private App bearer token used by the other 37 tools.
   "mcpServers": {
     "hubspot": {
       "command": "npx",
-      "args": ["-y", "@iamsamuelfraga/mcp-hubspot"],
+      "args": ["-y", "@nubiia/mcp-hubspot"],
       "env": {
         "HUBSPOT_ACCESS_TOKEN": "pat-na1-...",
         "HUBSPOT_DEVELOPER_API_KEY": "your-developer-api-key",

@@ -12,7 +12,7 @@
   "sourceCode": "https://github.com/iamsamuelfraga/mcp-hubspot",
   "package": {
     "registryType": "npm",
-    "identifier": "@iamsamuelfraga/mcp-hubspot",
+    "identifier": "@nubiia/mcp-hubspot",
     "version": "0.1.0"
   },
   "environmentVariables": {

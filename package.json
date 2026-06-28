@@ -1,5 +1,5 @@
 {
-  "name": "@iamsamuelfraga/mcp-hubspot",
+  "name": "@nubiia/mcp-hubspot",
   "version": "0.1.0",
   "description": "Model Context Protocol server for HubSpot CRM - Enterprise-grade HubSpot MCP implementation",
   "type": "module",

@@ -144,10 +144,10 @@ This reduces the blast radius if a token is compromised.
 
 ```bash
 # Check for updates
-npm outdated -g @iamsamuelfraga/mcp-hubspot
+npm outdated -g @nubiia/mcp-hubspot
 
 # Update to latest version
-npm update -g @iamsamuelfraga/mcp-hubspot
+npm update -g @nubiia/mcp-hubspot
 ```
 
 #### 6. Secure Your Development Environment
