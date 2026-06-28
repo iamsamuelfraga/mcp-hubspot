@@ -23,11 +23,11 @@
  * - hubspot_crm_batch_upsert  (deals)
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { HubSpotClient } from '../hubspot-client.js';
 import { getCrmTools } from '../tools/crm/index.js';
 import { type Tool } from '../types/common.js';
-import { mockFetchSuccess, mockFetchError } from './mock-client.js';
+import { mockFetchSuccess, mockFetchError, createMockResponse } from './mock-client.js';
 
 // ---------------------------------------------------------------------------
 // Test fixtures
@@ -82,9 +82,9 @@ function batchResponse<T>(results: T[]) {
 // ---------------------------------------------------------------------------
 
 describe('getCrmTools', () => {
-  it('returns exactly 13 tools', () => {
+  it('returns exactly 15 tools', () => {
     const { tools } = makeTools();
-    expect(tools).toHaveLength(13);
+    expect(tools).toHaveLength(15);
   });
 
   it('contains every expected tool name', () => {
@@ -104,6 +104,8 @@ describe('getCrmTools', () => {
       'hubspot_crm_batch_upsert',
       'hubspot_search_by_property',
       'hubspot_search_recent',
+      'hubspot_search_text',
+      'hubspot_search_by_association',
     ];
     for (const name of expected) {
       expect(names).toContain(name);
@@ -1020,7 +1022,8 @@ describe('hubspot_search_recent', () => {
     expect(body.filterGroups[0].filters[0]).toEqual({
       propertyName: 'hs_lastmodifieddate',
       operator: 'GTE',
-      value: '2025-01-01T00:00:00Z',
+      // `since` is normalized to epoch milliseconds before being sent to HubSpot.
+      value: String(Date.parse('2025-01-01T00:00:00Z')),
     });
     expect(body.sorts[0]).toEqual({
       propertyName: 'hs_lastmodifieddate',
@@ -1087,6 +1090,214 @@ describe('hubspot_search_recent', () => {
     const result = (await tool.handler({
       objectType: 'deals',
       since: '2025-01-01T00:00:00Z',
+    })) as { isError: boolean };
+    expect(result.isError).toBe(true);
+  });
+
+  it('normalizes an ISO date to the epoch-ms string (midnight UTC)', async () => {
+    const fetchMock = mockFetchSuccess({ results: [], paging: null });
+
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_search_recent');
+
+    await tool.handler({ objectType: 'deals', since: '2026-06-28' });
+
+    const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(requestInit.body as string) as {
+      filterGroups: { filters: { value: string }[] }[];
+    };
+    // 2026-06-28 midnight UTC === 1782604800000 ms (not the ISO string).
+    expect(body.filterGroups[0].filters[0].value).toBe('1782604800000');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite: hubspot_search_text
+// ---------------------------------------------------------------------------
+
+describe('hubspot_search_text', () => {
+  it('POSTs to the /search endpoint with a top-level query', async () => {
+    const fetchMock = mockFetchSuccess({ results: [DEAL_FIXTURE], paging: null });
+
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_search_text');
+
+    const result = await tool.handler({
+      objectType: 'deals',
+      query: 'acme',
+      properties: ['dealname', 'amount'],
+    });
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(url).toContain('/crm/v3/objects/deals/search');
+    expect(requestInit.method).toBe('POST');
+
+    const body = JSON.parse(requestInit.body as string) as {
+      query: string;
+      properties: string[];
+    };
+    expect(body.query).toBe('acme');
+    expect(body.properties).toEqual(['dealname', 'amount']);
+    expect(result).toMatchObject({ results: [expect.objectContaining({ id: '111' })] });
+  });
+
+  it('applies default properties when none are provided', async () => {
+    const fetchMock = mockFetchSuccess({ results: [], paging: null });
+
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_search_text');
+
+    await tool.handler({ objectType: 'deals', query: 'acme' });
+
+    const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(requestInit.body as string) as { properties: string[] };
+    // defaultSearchProperties('deals') includes dealname/amount/dealstage etc.
+    expect(body.properties).toContain('dealname');
+    expect(body.properties.length).toBeGreaterThan(1);
+  });
+
+  it('throws ZodError when query is missing', async () => {
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_search_text');
+
+    await expect(tool.handler({ objectType: 'deals' })).rejects.toThrow();
+  });
+
+  it('returns isError on HubSpot API error', async () => {
+    mockFetchError({ status: 'error', message: 'Missing scopes' }, 403);
+
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_search_text');
+
+    const result = (await tool.handler({ objectType: 'deals', query: 'acme' })) as {
+      isError: boolean;
+    };
+    expect(result.isError).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite: hubspot_search_text — auto-pagination
+// ---------------------------------------------------------------------------
+
+describe('hubspot_search_text — auto-pagination', () => {
+  it('concatenates results across pages and stops when no next cursor', async () => {
+    const page1 = {
+      results: [{ ...DEAL_FIXTURE, id: 'p1' }],
+      paging: { next: { after: '1' } },
+    };
+    const page2 = {
+      results: [{ ...DEAL_FIXTURE, id: 'p2' }],
+      paging: null,
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(createMockResponse(page1, 200))
+      .mockResolvedValueOnce(createMockResponse(page2, 200));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_search_text');
+
+    const result = (await tool.handler({
+      objectType: 'deals',
+      query: 'acme',
+      autoPaginate: true,
+    })) as { results: { id: string }[]; total: number };
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.results.map((r) => r.id)).toEqual(['p1', 'p2']);
+    expect(result.total).toBe(2);
+
+    // Second request carries the after cursor from page 1.
+    const secondBody = JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string) as {
+      after: string;
+    };
+    expect(secondBody.after).toBe('1');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite: hubspot_search_by_association
+// ---------------------------------------------------------------------------
+
+describe('hubspot_search_by_association', () => {
+  it('reads v4 associations then batch-reads the associated records', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        createMockResponse({ results: [{ toObjectId: 555 }, { toObjectId: 666 }] }, 200)
+      )
+      .mockResolvedValueOnce(createMockResponse(batchResponse([DEAL_FIXTURE]), 200));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_search_by_association');
+
+    const result = await tool.handler({
+      fromObjectType: 'companies',
+      fromId: '123',
+      toObjectType: 'deals',
+      properties: ['dealname'],
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    // First call: v4 associations GET.
+    const assocUrl = fetchMock.mock.calls[0][0] as string;
+    expect(assocUrl).toContain('/crm/v4/objects/companies/123/associations/deals');
+
+    // Second call: batch/read POST with the collected ids.
+    const batchUrl = fetchMock.mock.calls[1][0] as string;
+    const batchInit = fetchMock.mock.calls[1][1] as RequestInit;
+    expect(batchUrl).toContain('/crm/v3/objects/deals/batch/read');
+    expect(batchInit.method).toBe('POST');
+    const batchBody = JSON.parse(batchInit.body as string) as {
+      properties: string[];
+      inputs: { id: string }[];
+    };
+    expect(batchBody.inputs).toEqual([{ id: '555' }, { id: '666' }]);
+    expect(batchBody.properties).toEqual(['dealname']);
+    expect(result).toMatchObject({ status: 'COMPLETE' });
+  });
+
+  it('returns total 0 without a batch read when there are no associations', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(createMockResponse({ results: [] }, 200));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_search_by_association');
+
+    const result = (await tool.handler({
+      fromObjectType: 'companies',
+      fromId: '123',
+      toObjectType: 'deals',
+    })) as { results: unknown[]; total: number };
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ results: [], total: 0 });
+  });
+
+  it('throws ZodError when fromId is missing', async () => {
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_search_by_association');
+
+    await expect(
+      tool.handler({ fromObjectType: 'companies', toObjectType: 'deals' })
+    ).rejects.toThrow();
+  });
+
+  it('returns isError on HubSpot API error', async () => {
+    mockFetchError({ status: 'error', message: 'Server error' }, 500);
+
+    const { tools } = makeTools();
+    const tool = getTool(tools, 'hubspot_search_by_association');
+
+    const result = (await tool.handler({
+      fromObjectType: 'companies',
+      fromId: '123',
+      toObjectType: 'deals',
     })) as { isError: boolean };
     expect(result.isError).toBe(true);
   });

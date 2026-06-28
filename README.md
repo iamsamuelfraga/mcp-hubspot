@@ -7,7 +7,7 @@
 
 **The most complete HubSpot MCP server for Claude.**
 
-A Model Context Protocol (MCP) server that gives Claude comprehensive, enterprise-grade access to HubSpot CRM — covering contacts, companies, deals, tickets, quotes, owners, pipelines, custom object schemas, engagements, workflows, and more, all through 54 battle-tested tools (70 with a developer key).
+A Model Context Protocol (MCP) server that gives Claude comprehensive, enterprise-grade access to HubSpot CRM — covering contacts, companies, deals, tickets, quotes, owners, pipelines, custom object schemas, engagements, workflows, and more, all through 56 battle-tested tools (72 with a developer key).
 
 > Built and maintained by **[Nubiia](https://nubiia.es)** — automatización e integraciones con IA para negocios (MCP, HubSpot, Pipedrive, Holded y más). ¿Quieres algo así para tu empresa? Escríbenos en **[nubiia.es](https://nubiia.es)**.
 
@@ -15,12 +15,13 @@ A Model Context Protocol (MCP) server that gives Claude comprehensive, enterpris
 
 ## Features
 
-- **54 Tools Across 10 Toolsets** (+ 16 with developer key = 70 total) — complete coverage of the HubSpot CRM API surface
+- **56 Tools Across 10 Toolsets** (+ 16 with developer key = 72 total) — complete coverage of the HubSpot CRM API surface
 - **Workflow Automation v4 BETA** — create, update, monitor, and delete automation workflows
 - **Contact Enrollment** — enroll and unenroll any CRM object in a workflow
 - **CRM Object CRUD** — full create/read/update/archive for contacts, companies, deals, tickets, quotes, line_items, notes, calls, emails, meetings, and tasks
 - **Batch Operations** — up to 100 objects per call for efficient bulk reads and writes
-- **Smart & Guided Search** — filter groups with multiple operators and sorting, plus guided helpers (`search_by_property`, `search_recent`) so you don't hand-write filters
+- **Smart & Guided Search** — filter groups with operators and sorting, plus guided helpers: by property, recent (created/modified since), full-text keyword (`search_text`), and by association (`search_by_association`) — with optional auto-pagination and sensible default properties
+- **Robust Date Handling** — ISO dates, datetimes, and epoch seconds/ms are normalized to the epoch-ms (midnight-UTC) values HubSpot requires, avoiding off-by-one and rejected-timestamp errors
 - **Owner Resolution** — translate `hubspot_owner_id` values into real users (name, email)
 - **Pipelines & Stages** — translate `dealstage` / ticket stage IDs into readable stage labels
 - **Custom Object Schemas** — define, inspect, update, and delete custom object types
@@ -40,7 +41,7 @@ A Model Context Protocol (MCP) server that gives Claude comprehensive, enterpris
 
 | Domain | Tools | Description |
 |--------|------:|-------------|
-| CRM | 13 | Generic CRUD and batch for all object types, advanced search, plus guided `search_by_property` / `search_recent` |
+| CRM | 15 | Generic CRUD and batch for all object types, advanced search, plus guided search: by property, recent, full-text (`search_text`), and by association (`search_by_association`) |
 | Sales | 2 | Deal merging and quote assembly |
 | Engagements | 1 | Log a note/call/email/meeting/task and associate it to records in one call |
 | Associations | 5 | Create, archive, list, and batch-create object associations |
