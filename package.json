@@ -1,6 +1,6 @@
 {
   "name": "@nubiia/mcp-hubspot",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "HubSpot MCP server for AI assistants like Claude: contacts, deals, pipelines, owners, custom objects, engagements, and CRM automation. Built by Nubiia.",
   "type": "module",
   "bin": {

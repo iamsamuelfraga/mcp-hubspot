@@ -154,7 +154,7 @@ for (const group of registerToolGroups(client)) {
 const server = new Server(
   {
     name: 'hubspot-mcp',
-    version: '0.4.0',
+    version: '0.4.1',
   },
   {
     capabilities: {
