@@ -104,7 +104,7 @@ Add the server to your Claude Desktop config file:
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `HUBSPOT_ACCESS_TOKEN` | Yes | — | HubSpot Private App access token (`pat-na1-...`) |
-| `HUBSPOT_TOOLSETS` | No | all | Comma-separated domains to enable: `sales,engagements,associations,properties,workflows,automation,actions,owners` (note: `actions` also requires `HUBSPOT_DEVELOPER_API_KEY`) |
+| `HUBSPOT_TOOLSETS` | No | all | Comma-separated domains to enable: `sales,engagements,associations,properties,workflows,automation,actions,owners,pipelines,schemas` (note: `actions` also requires `HUBSPOT_DEVELOPER_API_KEY`) |
 | `LOG_LEVEL` | No | `info` | Logging level: `debug`, `info`, `warn`, `error` |
 
 ### Required Scopes
@@ -120,6 +120,8 @@ Grant only the scopes your use-case needs:
 | `workflows` | `automation` (requires BETA access approval from HubSpot) |
 | `automation` | `automation` |
 | `owners` | `crm.objects.owners.read` |
+| `pipelines` | `crm.objects.deals.read` (deals), `crm.objects.tickets.read` (tickets) |
+| `schemas` | `crm.schemas.custom.read`, `crm.schemas.custom.write` |
 
 ### Advanced Configuration Examples
 

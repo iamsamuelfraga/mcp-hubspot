@@ -1,7 +1,8 @@
 /**
  * Zod schemas for HubSpot Properties API v3.
  *
- * Covers listing, retrieving, and creating CRM object properties.
+ * Covers listing, retrieving, creating, updating, and archiving CRM object
+ * properties, plus listing and creating property groups.
  *
  * @see {@link https://developers.hubspot.com/docs/api/crm/properties}
  */
@@ -209,3 +210,140 @@ export const CreatePropertySchema = z.object({
 
 /** TypeScript type inferred from CreatePropertySchema. */
 export type CreatePropertyInput = z.infer<typeof CreatePropertySchema>;
+
+// ---------------------------------------------------------------------------
+// Update a property
+// ---------------------------------------------------------------------------
+
+/**
+ * Input schema for updating an existing property.
+ * Maps to PATCH /crm/v3/properties/{objectType}/{propertyName}.
+ *
+ * The internal `name` of a property cannot be changed — only the fields below
+ * are updatable. Only the provided fields are sent in the request body.
+ */
+export const UpdatePropertySchema = z.object({
+  objectType: z
+    .string()
+    .min(1)
+    .describe('CRM object type the property belongs to (e.g., "contacts", "deals", "companies")'),
+  propertyName: z
+    .string()
+    .min(1)
+    .describe(
+      'Internal name of the property to update (e.g., "custom_priority"). ' +
+        'The name itself cannot be changed.'
+    ),
+  label: z.string().min(1).optional().describe('New display label shown in HubSpot UI and reports'),
+  description: z
+    .string()
+    .optional()
+    .describe('New description explaining the purpose of this property'),
+  groupName: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Move the property to a different property group (e.g., "dealinformation")'),
+  type: PropertyTypeSchema.optional(),
+  fieldType: PropertyFieldTypeSchema.optional(),
+  options: z
+    .array(PropertyOptionSchema)
+    .optional()
+    .describe(
+      'Replacement set of selectable options (for enumeration properties). ' +
+        'Each option needs a unique value and a display label.'
+    ),
+  displayOrder: z
+    .number()
+    .int()
+    .optional()
+    .describe('Position of this property in forms and records (lower = earlier)'),
+  hidden: z.boolean().optional().describe('Whether to hide this property in the UI'),
+  formField: z.boolean().optional().describe('Whether this property can be used in HubSpot forms'),
+});
+
+/** TypeScript type inferred from UpdatePropertySchema. */
+export type UpdatePropertyInput = z.infer<typeof UpdatePropertySchema>;
+
+// ---------------------------------------------------------------------------
+// Archive (delete) a property
+// ---------------------------------------------------------------------------
+
+/**
+ * Input schema for archiving (deleting) a property definition.
+ * Maps to DELETE /crm/v3/properties/{objectType}/{propertyName}.
+ */
+export const ArchivePropertySchema = z.object({
+  objectType: z
+    .string()
+    .min(1)
+    .describe('CRM object type the property belongs to (e.g., "contacts", "deals", "companies")'),
+  propertyName: z
+    .string()
+    .min(1)
+    .describe('Internal name of the property to archive/delete (e.g., "custom_priority")'),
+});
+
+/** TypeScript type inferred from ArchivePropertySchema. */
+export type ArchivePropertyInput = z.infer<typeof ArchivePropertySchema>;
+
+// ---------------------------------------------------------------------------
+// List property groups
+// ---------------------------------------------------------------------------
+
+/**
+ * Input schema for listing the property groups of a CRM object type.
+ * Maps to GET /crm/v3/properties/{objectType}/groups.
+ */
+export const ListPropertyGroupsSchema = z.object({
+  objectType: z
+    .string()
+    .min(1)
+    .describe(
+      'CRM object type whose property groups to list (e.g., "contacts", "deals", "companies")'
+    ),
+  archived: z
+    .boolean()
+    .default(false)
+    .describe('Whether to include archived (deleted) property groups. Default false.'),
+});
+
+/** TypeScript type inferred from ListPropertyGroupsSchema. */
+export type ListPropertyGroupsInput = z.infer<typeof ListPropertyGroupsSchema>;
+
+// ---------------------------------------------------------------------------
+// Create a property group
+// ---------------------------------------------------------------------------
+
+/**
+ * Input schema for creating a property group on a CRM object type.
+ * Maps to POST /crm/v3/properties/{objectType}/groups.
+ */
+export const CreatePropertyGroupSchema = z.object({
+  objectType: z
+    .string()
+    .min(1)
+    .describe(
+      'CRM object type to add the property group to (e.g., "contacts", "deals", "companies")'
+    ),
+  name: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9_]+$/)
+    .describe(
+      'Internal group name (lowercase letters, numbers, underscores only). ' +
+        "Used as the key referenced by a property's groupName."
+    ),
+  label: z
+    .string()
+    .min(1)
+    .describe('Display label shown in HubSpot UI (can include spaces and capitals)'),
+  displayOrder: z
+    .number()
+    .int()
+    .optional()
+    .describe('Position of this group in the UI (lower = earlier)'),
+});
+
+/** TypeScript type inferred from CreatePropertyGroupSchema. */
+export type CreatePropertyGroupInput = z.infer<typeof CreatePropertyGroupSchema>;
