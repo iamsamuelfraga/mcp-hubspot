@@ -24,6 +24,7 @@ import { z } from 'zod';
 import { type Tool } from '../../types/common.js';
 import { type HubSpotClient } from '../../hubspot-client.js';
 import { handleToolError } from '../../utils/error-handler.js';
+import { toHubSpotTimestamp } from '../../utils/hubspot-date.js';
 import { type SimplePublicObject } from '../../types/hubspot-api.js';
 
 // ---------------------------------------------------------------------------
@@ -140,8 +141,11 @@ function buildEngagementProperties(
     ...(args.additionalProperties ?? {}),
   };
 
-  // Common: timestamp (default now) + optional owner
-  properties['hs_timestamp'] = args.timestamp ?? String(Date.now());
+  // Common: timestamp (default now) + optional owner.
+  // Normalize whatever the caller passed (ISO date/datetime or epoch s/ms) to
+  // the epoch-ms string HubSpot requires; fall back to now when omitted.
+  properties['hs_timestamp'] =
+    args.timestamp !== undefined ? toHubSpotTimestamp(args.timestamp) : String(Date.now());
   if (args.ownerId !== undefined) properties['hubspot_owner_id'] = args.ownerId;
 
   // Type-specific subject/body mapping (only set when provided)

@@ -1,7 +1,7 @@
 /**
  * Generic CRM tools for HubSpot MCP server — Phase 1 (Sales + Engagements).
  *
- * This module exposes 13 tools parametrized by `objectType`, covering the full
+ * This module exposes 15 tools parametrized by `objectType`, covering the full
  * HubSpot v3 CRM object surface for all 12 standard types:
  * - Core objects: contacts, companies, tickets
  * - Sales objects: deals, line_items, products, quotes
@@ -23,6 +23,8 @@
  * 11. hubspot_crm_batch_upsert  — POST /crm/v3/objects/{type}/batch/upsert
  * 12. hubspot_search_by_property — POST /crm/v3/objects/{type}/search (guided single-property filter)
  * 13. hubspot_search_recent     — POST /crm/v3/objects/{type}/search (guided created/modified-since filter)
+ * 14. hubspot_search_text       — POST /crm/v3/objects/{type}/search (guided keyword/full-text query)
+ * 15. hubspot_search_by_association — GET /crm/v4 associations + POST batch/read (associated records)
  *
  * Implementation notes:
  * - All search operations use `client.search()` which applies the stricter search rate limiter.
@@ -57,6 +59,74 @@ import {
   type SimplePublicObject,
   type BatchResponse,
 } from '../../types/hubspot-api.js';
+import { toHubSpotTimestamp } from '../../utils/hubspot-date.js';
+import { defaultSearchProperties } from '../../utils/default-properties.js';
+
+// ---------------------------------------------------------------------------
+// Shared auto-pagination helper
+// ---------------------------------------------------------------------------
+
+/** Hard upper bound on records collected via auto-pagination, regardless of `maxResults`. */
+const AUTO_PAGINATE_HARD_CAP = 1000;
+
+/**
+ * Runs a HubSpot search, optionally auto-paginating through all result pages.
+ *
+ * When `autoPaginate` is false, performs a single `client.search` request and
+ * returns the raw response. When true, loops following `paging.next.after`
+ * (re-issuing the search with `body.after` updated each round), accumulating
+ * `results` until there are no more pages or `maxResults` (capped at 1000) is
+ * reached, then returns a synthetic response with the concatenated `results`
+ * (truncated to the cap) and a `total` count.
+ *
+ * Always uses `client.search` so the stricter search rate limiter applies.
+ *
+ * @param client - Authenticated HubSpotClient instance.
+ * @param path - Search endpoint path (e.g., `/crm/v3/objects/deals/search`).
+ * @param body - Search request body (mutated copies are sent per page).
+ * @param options.autoPaginate - When true, follow all pages.
+ * @param options.maxResults - Max records to accumulate (capped at 1000).
+ * @returns The raw search response, or an aggregated `{ results, total }` response.
+ */
+async function runSearch(
+  client: HubSpotClient,
+  path: string,
+  body: Record<string, unknown>,
+  options: { autoPaginate: boolean; maxResults: number }
+): Promise<CollectionResponse<SimplePublicObject> & { total?: number }> {
+  if (!options.autoPaginate) {
+    return client.search<CollectionResponse<SimplePublicObject>>(path, body);
+  }
+
+  const cap = Math.min(options.maxResults, AUTO_PAGINATE_HARD_CAP);
+  const accumulated: SimplePublicObject[] = [];
+  let after = body['after'] as string | undefined;
+  let lastResponse: CollectionResponse<SimplePublicObject> | undefined;
+
+  while (accumulated.length < cap) {
+    const pageBody: Record<string, unknown> = { ...body };
+    if (after !== undefined) {
+      pageBody['after'] = after;
+    } else {
+      delete pageBody['after'];
+    }
+
+    const response = await client.search<CollectionResponse<SimplePublicObject>>(path, pageBody);
+    lastResponse = response;
+    accumulated.push(...(response.results ?? []));
+
+    const next = response.paging?.next?.after;
+    if (!next) break;
+    after = next;
+  }
+
+  const truncated = accumulated.slice(0, cap);
+  return {
+    ...(lastResponse ?? { results: [] }),
+    results: truncated,
+    total: truncated.length,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Shared Zod fragment: objectType enum
@@ -116,6 +186,22 @@ const ARCHIVED_JSON = {
 const AFTER_CURSOR_JSON = {
   type: 'string',
   description: 'Pagination cursor from `pagination.nextCursor` in the previous response.',
+};
+
+const AUTO_PAGINATE_JSON = {
+  type: 'boolean',
+  description:
+    'When true, automatically follow `paging.next.after` and return all matching records ' +
+    '(up to `maxResults`) in a single call instead of one page. Default: false.',
+  default: false,
+};
+
+const MAX_RESULTS_JSON = {
+  type: 'integer',
+  description: 'Cap on total records collected when autoPaginate is true (1–1000). Default: 200.',
+  minimum: 1,
+  maximum: 1000,
+  default: 200,
 };
 
 const LIST_LIMIT_JSON = {
@@ -492,8 +578,11 @@ function buildSearchTool(client: HubSpotClient): Tool {
       '[{"filters":[{"propertyName":"amount","operator":"GTE","value":"1000"},' +
       '{"propertyName":"dealstage","operator":"EQ","value":"closedwon"}]},' +
       '{"filters":[{"propertyName":"dealname","operator":"CONTAINS_TOKEN","value":"Acme"}]}]. ' +
+      'DATE FILTERS: date/datetime filter `value`s must be epoch MILLISECONDS (e.g., "1782604800000"), ' +
+      'NOT ISO strings — passing "2026-06-28" yields wrong/empty results. ' +
       'For simple single-property lookups, prefer hubspot_search_by_property; for created/modified-since ' +
-      'queries, prefer hubspot_search_recent. ' +
+      'queries, prefer hubspot_search_recent (it accepts ISO dates and normalizes them for you); ' +
+      'for keyword/full-text search, prefer hubspot_search_text. ' +
       'IMPORTANT NOTES: ' +
       '(1) Search has stricter rate limits (~5 req/s per token) than regular reads — avoid polling. ' +
       '(2) Search has an indexing latency of several seconds — do NOT use immediately after create/update. ' +
@@ -1010,6 +1099,20 @@ function buildSearchByPropertyTool(client: HubSpotClient): Tool {
       .default(10)
       .describe('Records per response (1–100). Default: 10.'),
     after: z.string().optional().describe('Pagination cursor from `paging.next.after`.'),
+    autoPaginate: z
+      .boolean()
+      .default(false)
+      .describe(
+        'When true, automatically follow `paging.next.after` and return all matching records ' +
+          '(up to `maxResults`) in a single call. Default: false.'
+      ),
+    maxResults: z
+      .number()
+      .int()
+      .min(1)
+      .max(1000)
+      .default(200)
+      .describe('Cap on total records when autoPaginate is true (1–1000). Default: 200.'),
   });
 
   return {
@@ -1058,6 +1161,8 @@ function buildSearchByPropertyTool(client: HubSpotClient): Tool {
           description: 'Records per response (1–100). Default: 10.',
         },
         after: AFTER_CURSOR_JSON,
+        autoPaginate: AUTO_PAGINATE_JSON,
+        maxResults: MAX_RESULTS_JSON,
       },
       required: ['objectType', 'propertyName', 'value'],
       additionalProperties: false,
@@ -1080,15 +1185,15 @@ function buildSearchByPropertyTool(client: HubSpotClient): Tool {
               ],
             },
           ],
+          properties: args.properties ?? defaultSearchProperties(validType),
           limit: args.limit,
         };
-        if (args.properties !== undefined) searchBody['properties'] = args.properties;
         if (args.after !== undefined) searchBody['after'] = args.after;
 
-        const result = await client.search<CollectionResponse<SimplePublicObject>>(
-          `/${config.basePath}/search`,
-          searchBody
-        );
+        const result = await runSearch(client, `/${config.basePath}/search`, searchBody, {
+          autoPaginate: args.autoPaginate,
+          maxResults: args.maxResults,
+        });
         return result;
       } catch (error) {
         return handleToolError(error);
@@ -1131,6 +1236,20 @@ function buildSearchRecentTool(client: HubSpotClient): Tool {
       .default(10)
       .describe('Records per response (1–100). Default: 10.'),
     after: z.string().optional().describe('Pagination cursor from `paging.next.after`.'),
+    autoPaginate: z
+      .boolean()
+      .default(false)
+      .describe(
+        'When true, automatically follow `paging.next.after` and return all matching records ' +
+          '(up to `maxResults`) in a single call. Default: false.'
+      ),
+    maxResults: z
+      .number()
+      .int()
+      .min(1)
+      .max(1000)
+      .default(200)
+      .describe('Cap on total records when autoPaginate is true (1–1000). Default: 200.'),
   });
 
   return {
@@ -1182,6 +1301,8 @@ function buildSearchRecentTool(client: HubSpotClient): Tool {
           description: 'Records per response (1–100). Default: 10.',
         },
         after: AFTER_CURSOR_JSON,
+        autoPaginate: AUTO_PAGINATE_JSON,
+        maxResults: MAX_RESULTS_JSON,
       },
       required: ['objectType', 'since'],
       additionalProperties: false,
@@ -1196,6 +1317,10 @@ function buildSearchRecentTool(client: HubSpotClient): Tool {
         args.dateProperty ?? (args.field === 'created' ? 'createdate' : 'hs_lastmodifieddate');
 
       try {
+        // Normalize `since` to epoch milliseconds — HubSpot date filters reject ISO
+        // strings and silently mis-handle epoch seconds, causing wrong/empty results.
+        const sinceMs = toHubSpotTimestamp(args.since);
+
         const searchBody: Record<string, unknown> = {
           filterGroups: [
             {
@@ -1203,20 +1328,227 @@ function buildSearchRecentTool(client: HubSpotClient): Tool {
                 {
                   propertyName: resolvedProperty,
                   operator: 'GTE',
-                  value: args.since,
+                  value: sinceMs,
                 },
               ],
             },
           ],
           sorts: [{ propertyName: resolvedProperty, direction: 'DESCENDING' }],
+          properties: args.properties ?? defaultSearchProperties(validType),
           limit: args.limit,
         };
-        if (args.properties !== undefined) searchBody['properties'] = args.properties;
         if (args.after !== undefined) searchBody['after'] = args.after;
 
-        const result = await client.search<CollectionResponse<SimplePublicObject>>(
-          `/${config.basePath}/search`,
-          searchBody
+        const result = await runSearch(client, `/${config.basePath}/search`, searchBody, {
+          autoPaginate: args.autoPaginate,
+          maxResults: args.maxResults,
+        });
+        return result;
+      } catch (error) {
+        return handleToolError(error);
+      }
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tool 14: hubspot_search_text
+// ---------------------------------------------------------------------------
+
+function buildSearchTextTool(client: HubSpotClient): Tool {
+  const schema = z.object({
+    objectType: ObjectTypeSchema,
+    query: z
+      .string()
+      .min(1)
+      .describe('Keyword / full-text query matched against the default searchable properties.'),
+    properties: z
+      .array(z.string())
+      .optional()
+      .describe('Property names to return. Defaults to a sensible per-object set when omitted.'),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .default(10)
+      .describe('Records per response (1–100). Default: 10.'),
+    after: z.string().optional().describe('Pagination cursor from `paging.next.after`.'),
+    autoPaginate: z
+      .boolean()
+      .default(false)
+      .describe(
+        'When true, automatically follow `paging.next.after` and return all matching records ' +
+          '(up to `maxResults`) in a single call. Default: false.'
+      ),
+    maxResults: z
+      .number()
+      .int()
+      .min(1)
+      .max(1000)
+      .default(200)
+      .describe('Cap on total records when autoPaginate is true (1–1000). Default: 200.'),
+  });
+
+  return {
+    name: 'hubspot_search_text',
+    description:
+      'Keyword / full-text search over HubSpot CRM records — a guided shortcut over ' +
+      'hubspot_crm_search that uses HubSpot’s top-level `query` to match across the default ' +
+      'searchable properties of the object (e.g., name, email, domain). Applies to all object types. ' +
+      'Provide a `query` string; optionally narrow the returned fields with `properties` (defaults to ' +
+      'a sensible per-object set otherwise). Use this when you have a search term but do not know ' +
+      'which property holds it. For exact single-property matches use hubspot_search_by_property; ' +
+      'for created/modified-since queries use hubspot_search_recent. ' +
+      'Set `autoPaginate: true` to collect all matches (up to `maxResults`, hard cap 1000) in one call. ' +
+      'Returns the raw HubSpot search response — paginate using `paging.next.after`.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        objectType: OBJECT_TYPE_JSON,
+        query: {
+          type: 'string',
+          minLength: 1,
+          description:
+            'Keyword / full-text query matched against the default searchable properties.',
+        },
+        properties: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Property names to return. Defaults to a sensible per-object set when omitted.',
+        },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 100,
+          default: 10,
+          description: 'Records per response (1–100). Default: 10.',
+        },
+        after: AFTER_CURSOR_JSON,
+        autoPaginate: AUTO_PAGINATE_JSON,
+        maxResults: MAX_RESULTS_JSON,
+      },
+      required: ['objectType', 'query'],
+      additionalProperties: false,
+    },
+    handler: async (rawArgs: unknown) => {
+      const args = schema.parse(rawArgs);
+      const validType = validateObjectType(args.objectType);
+      const config = (await import('../../utils/object-types.js')).getObjectTypeConfig(validType);
+
+      try {
+        const searchBody: Record<string, unknown> = {
+          query: args.query,
+          properties: args.properties ?? defaultSearchProperties(validType),
+          limit: args.limit,
+        };
+        if (args.after !== undefined) searchBody['after'] = args.after;
+
+        const result = await runSearch(client, `/${config.basePath}/search`, searchBody, {
+          autoPaginate: args.autoPaginate,
+          maxResults: args.maxResults,
+        });
+        return result;
+      } catch (error) {
+        return handleToolError(error);
+      }
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tool 15: hubspot_search_by_association
+// ---------------------------------------------------------------------------
+
+function buildSearchByAssociationTool(client: HubSpotClient): Tool {
+  const schema = z.object({
+    fromObjectType: ObjectTypeSchema,
+    fromId: z.string().min(1).describe('HubSpot record ID of the source object.'),
+    toObjectType: ObjectTypeSchema,
+    properties: z
+      .array(z.string())
+      .optional()
+      .describe('Property names to return on the associated records. Defaults per object type.'),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(500)
+      .default(50)
+      .describe('Maximum associated records to resolve (1–500). Default: 50.'),
+  });
+
+  return {
+    name: 'hubspot_search_by_association',
+    description:
+      'Find HubSpot CRM records associated to a given record — e.g., the contacts on a deal, the ' +
+      'deals on a company, or the notes on a contact. First reads the v4 associations from ' +
+      '`fromObjectType`/`fromId` to `toObjectType`, then batch-reads the associated records so you ' +
+      'get full property values (not just IDs) in one call. Applies to all object types. ' +
+      'Specify `properties` to control the returned fields (defaults to a sensible per-object set). ' +
+      'Returns the batch-read response (`{ status, results: [...] }`); when there are no associations, ' +
+      'returns `{ results: [], total: 0 }` without a batch read.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fromObjectType: {
+          ...OBJECT_TYPE_JSON,
+          description:
+            'Source object type (the record you already have). ' + OBJECT_TYPE_JSON.description,
+        },
+        fromId: {
+          type: 'string',
+          minLength: 1,
+          description: 'HubSpot record ID of the source object.',
+        },
+        toObjectType: {
+          ...OBJECT_TYPE_JSON,
+          description:
+            'Target object type to fetch associated records for. ' + OBJECT_TYPE_JSON.description,
+        },
+        properties: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Property names to return on the associated records. Defaults per object type.',
+        },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 500,
+          default: 50,
+          description: 'Maximum associated records to resolve (1–500). Default: 50.',
+        },
+      },
+      required: ['fromObjectType', 'fromId', 'toObjectType'],
+      additionalProperties: false,
+    },
+    handler: async (rawArgs: unknown) => {
+      const args = schema.parse(rawArgs);
+      const validFrom = validateObjectType(args.fromObjectType);
+      const validTo = validateObjectType(args.toObjectType);
+
+      try {
+        // Step 1: read v4 associations from the source record to the target object type.
+        const associations = await client.get<CollectionResponse<{ toObjectId: number | string }>>(
+          `/crm/v4/objects/${encodeURIComponent(validFrom)}/${encodeURIComponent(args.fromId)}/associations/${encodeURIComponent(validTo)}`,
+          { limit: args.limit }
+        );
+
+        const ids = (associations.results ?? []).map((r) => r.toObjectId);
+        if (ids.length === 0) {
+          return { results: [], total: 0 };
+        }
+
+        // Step 2: batch-read the associated records to return full property values.
+        const config = (await import('../../utils/object-types.js')).getObjectTypeConfig(validTo);
+        const result = await client.post<BatchResponse<SimplePublicObject>>(
+          `/${config.basePath}/batch/read`,
+          {
+            properties: args.properties ?? defaultSearchProperties(validTo),
+            inputs: ids.map((id) => ({ id: String(id) })),
+          }
         );
         return result;
       } catch (error) {
@@ -1231,7 +1563,7 @@ function buildSearchRecentTool(client: HubSpotClient): Tool {
 // ---------------------------------------------------------------------------
 
 /**
- * Returns all 13 generic CRM tools parametrized by `objectType`.
+ * Returns all 15 generic CRM tools parametrized by `objectType`.
  *
  * Covers HubSpot v3 CRM object operations for all 12 standard types:
  * - Core objects: contacts, companies, tickets
@@ -1244,7 +1576,7 @@ function buildSearchRecentTool(client: HubSpotClient): Tool {
  * authentication, rate limiting, retry, and error parsing.
  *
  * @param client - Authenticated HubSpotClient instance.
- * @returns Array of 13 Tool objects ready for MCP registration.
+ * @returns Array of 15 Tool objects ready for MCP registration.
  *
  * @example
  * import { getCrmTools } from './tools/crm/index.js';
@@ -1266,5 +1598,7 @@ export function getCrmTools(client: HubSpotClient): Tool[] {
     buildBatchUpsertTool(client),
     buildSearchByPropertyTool(client),
     buildSearchRecentTool(client),
+    buildSearchTextTool(client),
+    buildSearchByAssociationTool(client),
   ];
 }
