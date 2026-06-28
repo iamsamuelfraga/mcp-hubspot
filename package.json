@@ -28,6 +28,7 @@
     "format:check": "prettier --check \"src/**/*.ts\"",
     "type-check": "tsc --noEmit",
     "prepare": "husky",
+    "prepublishOnly": "npm run clean && npm run build",
     "clean": "rm -rf dist"
   },
   "keywords": [
