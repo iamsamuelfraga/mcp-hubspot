@@ -20,7 +20,7 @@ We take the security of the HubSpot MCP Server seriously. If you discover a secu
 
 Send a detailed report to:
 
-**Email**: security@iamsamuelfraga.dev
+**Email**: hola@nubiia.es
 
 Or use GitHub's private security advisory feature:
 
@@ -321,6 +321,6 @@ For security-related questions that are not vulnerabilities:
 
 - Open a [GitHub Discussion](https://github.com/nubiia-dev/mcp-hubspot/discussions)
 - Tag with the `security` label
-- Or email security@iamsamuelfraga.dev
+- Or email hola@nubiia.es
 
 Thank you for helping keep HubSpot MCP Server secure!
