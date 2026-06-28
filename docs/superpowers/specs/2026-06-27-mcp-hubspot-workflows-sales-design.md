@@ -166,7 +166,7 @@ Scope: `automation`. La colección Postman de referencia (proporcionada por el u
 - **Paginación:** `paging.next.after` + `limit`. Legacy v2 usa `offset`/`has-more` (distinto).
 - **Modelo de error:** `{ status, message, correlationId, category, subCategory?, errors[]{message,code,context}, context?, links? }`. Tratar todos los campos como opcionales. Categorías: `VALIDATION_ERROR`, `RATE_LIMIT`, `MISSING_SCOPES`, `OBJECT_NOT_FOUND`, etc.
 
-## 6. Superficie de tools (núcleo ≈ 36)
+## 6. Superficie de tools (núcleo ≈ 37)
 
 CRM genéricas (11): `hubspot_crm_list`, `_get`, `_create`, `_update`, `_archive`, `_search`, `_batch_create`, `_batch_read`, `_batch_update`, `_batch_archive`, `_batch_upsert` (todas con `objectType` enum).
 Sales (2): `hubspot_deals_merge`, `hubspot_quotes_assemble`.
@@ -174,7 +174,7 @@ Associations (5): `_create`, `_archive`, `_list`, `_batch_create`, `_labels_list
 Properties (3): `_list`, `_get`, `_create`.
 Workflows v4 (9): `_list`, `_get`, `_batch_read`, `_create`, `_update`, `_delete`, `_email_campaigns`, `_performance`, `_id_mappings`.
 Automation (2): `_callback_complete`, `_callback_complete_batch`.
-Enrollment/v3 (4): `_enroll`, `_unenroll`, `_get_enrollments`, `_workflows_v3_list`.
+Enrollment/v3 (5): `_enroll`, `_unenroll`, `_get_enrollments`, `_workflows_v3_list`, `_workflows_v3_get`.
 
 Toolset-filter: `HUBSPOT_TOOLSETS=sales,engagements,associations,properties,workflows,automation` (default: todos).
 

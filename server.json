@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/draft/server.schema.json",
   "name": "io.github.iamsamuelfraga/mcp-hubspot",
-  "description": "Enterprise-grade HubSpot CRM integration with 37 MCP tools for sales, workflows, and automation",
+  "description": "Enterprise-grade HubSpot CRM integration with 37 MCP tools for sales, workflows, and automation (+ 16 conditional actions tools with developer key = 53 total)",
   "version": "0.1.0",
   "homepage": "https://github.com/iamsamuelfraga/mcp-hubspot",
   "license": "MIT",
@@ -21,7 +21,13 @@
       "required": true
     },
     "HUBSPOT_TOOLSETS": {
-      "description": "Comma-separated toolsets to enable (e.g., 'sales,workflows'). Defaults to all toolsets."
+      "description": "Comma-separated toolsets to enable. Valid values: sales, engagements, associations, properties, workflows, automation, actions. Defaults to all toolsets. Note: 'actions' also requires HUBSPOT_DEVELOPER_API_KEY."
+    },
+    "HUBSPOT_DEVELOPER_API_KEY": {
+      "description": "HubSpot developer API key (hapikey). Required to activate the 16 'actions' toolset tools for Custom Workflow Action definitions. Obtain from developers.hubspot.com."
+    },
+    "HUBSPOT_APP_ID": {
+      "description": "HubSpot App ID that owns the custom action definitions. Required when using the 'actions' toolset."
     },
     "LOG_LEVEL": {
       "description": "Logging verbosity: debug, info, warn, error. Defaults to info."

@@ -134,7 +134,7 @@ function buildListWorkflowsTool(client: HubSpotClient): Tool {
         after: {
           type: 'string',
           description:
-            'Pagination cursor from a previous response (paging.next.after). ' +
+            'Pagination cursor from the previous response. Use the value of pagination.nextCursor. ' +
             'Omit for the first page.',
         },
       },

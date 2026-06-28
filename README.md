@@ -12,7 +12,7 @@ A Model Context Protocol (MCP) server that gives Claude comprehensive, enterpris
 
 ## Features
 
-- **37 Tools Across 6 Domains** — complete coverage of the HubSpot CRM API surface
+- **37 Tools Across 7 Domains** (+ 16 with developer key = 53 total) — complete coverage of the HubSpot CRM API surface
 - **Workflow Automation v4 BETA** — create, update, monitor, and delete automation workflows
 - **Contact Enrollment** — enroll and unenroll any CRM object in a workflow
 - **CRM Object CRUD** — full create/read/update/archive for contacts, companies, deals, tickets, quotes, line_items, notes, calls, emails, meetings, and tasks
@@ -39,7 +39,14 @@ A Model Context Protocol (MCP) server that gives Claude comprehensive, enterpris
 | Properties | 3 | List, get, and create custom property definitions |
 | Workflows v4 BETA | 9 | Create, update, delete, and monitor automation workflows |
 | Automation | 2 | Complete delayed workflow callbacks (single and batch) |
-| Enrollment | 5 | Enroll/unenroll objects in workflows; v3 legacy reads |
+| Enrollment | 5 | Enroll/unenroll objects in workflows; v3 legacy reads ¹ |
+| Actions *(dev key)* | 16 | Custom Workflow Action definitions — requires `HUBSPOT_DEVELOPER_API_KEY` ² |
+
+> ¹ The v3 legacy tools (`hubspot_workflows_v3_list`, `hubspot_workflows_v3_get`) belong to the `automation`
+> toolset — activate them with `HUBSPOT_TOOLSETS=automation`.
+>
+> ² Actions tools use developer API key auth (hapikey) instead of a Private App access token and are only
+> registered when `HUBSPOT_DEVELOPER_API_KEY` is present. See [Actions Toolset](#actions-toolset-phase-7) below.
 
 ---
 
@@ -97,7 +104,7 @@ Add the server to your Claude Desktop config file:
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `HUBSPOT_ACCESS_TOKEN` | Yes | — | HubSpot Private App access token (`pat-na1-...`) |
-| `HUBSPOT_TOOLSETS` | No | all | Comma-separated domains to enable: `sales,engagements,associations,properties,workflows,automation` |
+| `HUBSPOT_TOOLSETS` | No | all | Comma-separated domains to enable: `sales,engagements,associations,properties,workflows,automation,actions` (note: `actions` also requires `HUBSPOT_DEVELOPER_API_KEY`) |
 | `LOG_LEVEL` | No | `info` | Logging level: `debug`, `info`, `warn`, `error` |
 
 ### Required Scopes
@@ -191,6 +198,70 @@ The `workflows` toolset uses HubSpot's Workflows v4 API, which is currently in *
 
 - `hubspot_workflows_v3_list` — list all workflows
 - `hubspot_workflows_v3_get` — get a specific workflow by ID
+
+---
+
+## Actions Toolset (Phase 7)
+
+The `actions` toolset exposes 16 tools for managing **Custom Workflow Action definitions** — the
+reusable action types that developers can publish to the HubSpot Workflows editor.
+
+### Required environment variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `HUBSPOT_DEVELOPER_API_KEY` | Yes (for actions) | HubSpot developer API key — obtain from your developer account at developers.hubspot.com |
+| `HUBSPOT_APP_ID` | Yes (for actions) | The HubSpot App ID that owns the action definitions |
+
+### Activation
+
+Actions tools are **only registered when `HUBSPOT_DEVELOPER_API_KEY` is present**. They do not
+appear in the tool list when only `HUBSPOT_ACCESS_TOKEN` is configured. You can also explicitly
+enable them via `HUBSPOT_TOOLSETS=actions` (still requires the developer key).
+
+### Authentication
+
+All 16 `hubspot_actions_*` tools authenticate via **hapikey** (developer API key appended to the
+query string), not the Private App bearer token used by the other 37 tools.
+
+### Tools
+
+| Tool | Description |
+|------|-------------|
+| `hubspot_actions_list` | List all custom action definitions for an app |
+| `hubspot_actions_create` | Create a new action definition |
+| `hubspot_actions_get` | Get a single action definition |
+| `hubspot_actions_update` | Update (PATCH) an action definition |
+| `hubspot_actions_delete` | Delete an action definition |
+| `hubspot_actions_revisions_list` | List all revisions for an action |
+| `hubspot_actions_revisions_get` | Get a specific revision |
+| `hubspot_actions_functions_list` | List all functions on an action |
+| `hubspot_actions_functions_get_by_type` | Get a function by type |
+| `hubspot_actions_functions_put` | Create or replace a function by type |
+| `hubspot_actions_functions_delete_by_type` | Delete a function by type |
+| `hubspot_actions_functions_get_by_id` | Get a function by type and ID |
+| `hubspot_actions_functions_update_by_id` | Replace a function by type and ID |
+| `hubspot_actions_functions_delete_by_id` | Delete a function by type and ID |
+| `hubspot_actions_requires_object_get` | Get the requires-object setting for an action |
+| `hubspot_actions_requires_object_set` | Set the requires-object setting for an action |
+
+### Claude Desktop configuration example
+
+```json
+{
+  "mcpServers": {
+    "hubspot": {
+      "command": "npx",
+      "args": ["-y", "@iamsamuelfraga/mcp-hubspot"],
+      "env": {
+        "HUBSPOT_ACCESS_TOKEN": "pat-na1-...",
+        "HUBSPOT_DEVELOPER_API_KEY": "your-developer-api-key",
+        "HUBSPOT_APP_ID": "123456"
+      }
+    }
+  }
+}
+```
 
 ---
 

@@ -244,7 +244,8 @@ function buildListAssociationsTool(client: HubSpotClient): Tool {
         },
         after: {
           type: 'string',
-          description: 'Pagination cursor from a previous response paging.next.after',
+          description:
+            'Pagination cursor from the previous response. Use the value of pagination.nextCursor.',
         },
       },
       required: ['fromType', 'fromId', 'toType'],

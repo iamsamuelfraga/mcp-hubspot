@@ -2,9 +2,12 @@
  * Generic CRM tools for HubSpot MCP server — Phase 1 (Sales + Engagements).
  *
  * This module exposes 11 tools parametrized by `objectType`, covering the full
- * HubSpot v3 CRM object surface for all 9 supported types:
+ * HubSpot v3 CRM object surface for all 12 standard types:
+ * - Core objects: contacts, companies, tickets
  * - Sales objects: deals, line_items, products, quotes
  * - Engagement objects: calls, meetings, tasks, notes, emails
+ *
+ * Custom object type IDs (e.g. "2-12345678") are also accepted.
  *
  * Tools:
  * 1.  hubspot_crm_list          — GET  /crm/v3/objects/{type}
@@ -67,7 +70,7 @@ const ObjectTypeSchema = z
   })
   .describe(
     'CRM object type. ' +
-      'Standard objects: contacts, companies, deals, line_items, products, quotes. ' +
+      'Standard objects: contacts, companies, tickets, deals, line_items, products, quotes. ' +
       'Engagement objects: calls, meetings, tasks, notes, emails. ' +
       'Custom objects: pass the object type ID, e.g. "2-12345678".'
   );
@@ -81,7 +84,7 @@ const OBJECT_TYPE_JSON = {
   type: 'string',
   examples: [...CRM_OBJECT_TYPES],
   description:
-    'CRM object type. Standard objects: contacts, companies, deals, line_items, products, quotes. ' +
+    'CRM object type. Standard objects: contacts, companies, tickets, deals, line_items, products, quotes. ' +
     'Engagement objects: calls, meetings, tasks, notes, emails. ' +
     'Custom objects: pass the object type ID, e.g. "2-12345678".',
 };
@@ -184,7 +187,7 @@ function buildListTool(client: HubSpotClient): Tool {
       .max(100)
       .default(10)
       .describe('Records per page (1–100). Default: 10.'),
-    after: z.string().optional().describe('Pagination cursor from `paging.next.after`.'),
+    after: z.string().optional().describe('Pagination cursor from `pagination.nextCursor`.'),
     properties: z
       .string()
       .optional()
@@ -483,7 +486,9 @@ function buildSearchTool(client: HubSpotClient): Tool {
       '     Use hubspot_crm_get instead for read-after-write. ' +
       '(3) Max total results via paging: 10 000. ' +
       '(4) Specify `properties` explicitly — HubSpot returns only defaults otherwise. ' +
-      'Returns matching records with their requested properties.',
+      'Returns matching records with their requested properties. ' +
+      'NOTE: Search responses use the raw HubSpot format — paginate using `paging.next.after` ' +
+      'from the response (not `pagination.nextCursor` which list tools return).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -970,9 +975,12 @@ function buildBatchUpsertTool(client: HubSpotClient): Tool {
 /**
  * Returns all 11 generic CRM tools parametrized by `objectType`.
  *
- * Covers HubSpot v3 CRM object operations for:
+ * Covers HubSpot v3 CRM object operations for all 12 standard types:
+ * - Core objects: contacts, companies, tickets
  * - Sales objects: deals, line_items, products, quotes
  * - Engagement objects: calls, meetings, tasks, notes, emails
+ *
+ * Custom object type IDs (e.g. "2-12345678") are also accepted.
  *
  * Each tool is wired to the provided `HubSpotClient` instance which handles
  * authentication, rate limiting, retry, and error parsing.
